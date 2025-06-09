@@ -1,8 +1,8 @@
+from typing import Callable
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
-    QGraphicsSimpleTextItem,
     QGraphicsTextItem,
     QHBoxLayout,
     QLabel,
@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+
+from lang import getstr
 
 
 class MultipleInputDialog(QDialog):
@@ -34,8 +36,8 @@ class MultipleInputDialog(QDialog):
 
         # Кнопки OK и Cancel
         button_layout = QHBoxLayout()
-        ok_button = QPushButton("OK")
-        cancel_button = QPushButton("Отмена")
+        ok_button = QPushButton(getstr("accept"))
+        cancel_button = QPushButton(getstr("cancel"))
         ok_button.clicked.connect(self.accept)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(ok_button)
@@ -47,44 +49,40 @@ class MultipleInputDialog(QDialog):
     def getValues(self) -> tuple[str] | None:
         if self.exec():
             try:
-                values = tuple(le.text() for le in self.line_edits)
-                return values
+                values = [le.text() for le in self.line_edits]
+                if any(v for v in values):
+                    return values
             except ValueError:
                 # Обработка некорректных данных
                 return None
         return None
 
 
-class EditableTextItem(QGraphicsSimpleTextItem):
-    def __init__(self, text, parent):
+class EditableTextItem(QGraphicsTextItem):
+    def __init__(self, text, parent, handler: Callable[[str], None] = None):
         super().__init__(text, parent)
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
-        self.editor = None  # To hold the temporary editor
+        self.setFlags(
+            # QGraphicsTextItem.GraphicsItemFlag.ItemIsSelectable |
+            QGraphicsTextItem.GraphicsItemFlag.ItemIsFocusable
+        )
+        
+    #     self.handler = handler
 
-    def mousePressEvent(self, event):
-        if not self.editor:
-            # Create a QGraphicsTextItem for editing
-            #self.toPlainText()
-            self.editor = QGraphicsTextItem()
-            self.editor.setParentItem(self)
-            self.editor.setPos(0, 0)
-            self.editor.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextEditorInteraction
-            )
-            self.editor.focusInEvent = self.focusInEvent
-            # Connect focus out or key press to finish editing
-            self.editor.focusOutEvent = self.finish_editing
-        super().mousePressEvent(event)
+    # def set_handler(self, handler):
+    #     self.handler = handler
 
-    def focusInEvent(self, event):
-        super().focusInEvent(event)
+    # def keyPressEvent(self, event):
+    #     if event.key() in (Qt.Key.Key_Return.real, Qt.Key.Key_Enter.real):
+    #         # Завершаем редактирование по Enter: снимаем фокус и отключаем редактирование
+    #         self.clearFocus()
+    #         self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+    #         self.handler(self.toPlainText())
+    #     return super().keyPressEvent(event)
 
-    def finish_editing(self, event):
-        # Save edited text back to the simple text item
-        new_text = self.editor.toPlainText()
-        self.setText(new_text)
-        # Remove the editor
-        if self.editor:
-            self.scene().removeItem(self.editor)
-            self.editor = None
+    # def mouseDoubleClickEvent(self, event):
+    #     # При двойном клике включаем режим редактирования
+    #     self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
+    #     self.setFocus()
+    #     return super().mousePressEvent(event)

@@ -1,5 +1,4 @@
 import os
-from functools import reduce
 from os.path import dirname, join
 
 import yaml
@@ -19,36 +18,21 @@ def load_locales(path):
     if not yaml_files:
         return {}
 
-    # Recursive dictionary merge
-    def merge(d1, d2):
-        for key, value in d2.items():
-            if key in d1 and isinstance(d1[key], dict) and isinstance(value, dict):
-                # If both values are dictionaries, merge them recursively
-                merge(d1[key], value)
-            else:
-                # Otherwise, overwrite or add the value from d2 to d1
-                d1[key] = value
-        return d1
-
     # Load and merge all YAML files
     merged_data = {}
     for yaml_file in yaml_files:
         file_path = join(path, yaml_file)
+        lang, _ = yaml_file.split(".")
         with open(file_path, "r", encoding="utf-8") as file:
             # Load YAML data, default to empty dict if None
             data = yaml.safe_load(file) or {}
-            merged_data = merge(merged_data, data)
+            merged_data[lang] = data
 
-        return merged_data
+    return merged_data
 
 
-def get_locale_str(dictionary, keys, default=None):
-    return reduce(
-        lambda d, key: d.get(key, default) if isinstance(d, dict) else default,
-        keys.split("."),
-        dictionary,
-    )
-
+current_lang = ""
 
 locale = load_locales(join(dirname(__file__), "locale"))
-getstr = lambda lang, path: get_locale_str(locale, f"{lang}.{path}")  # noqa: E731
+
+getstr = lambda name: locale[current_lang][name]  # noqa: E731

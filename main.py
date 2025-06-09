@@ -1,100 +1,119 @@
 import sys
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import (
-    QPainter,
-)
 from PyQt6.QtWidgets import (
     QApplication,
-    QGraphicsScene,
-    QGraphicsView,
-    QMainWindow,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
 
-from graphics import Edge, Node
-from tools import MultipleInputDialog
+import lang
+from graphics import AutomataGraphView
 
 
-class GraphView(QGraphicsView):
+class TabWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.setScene(QGraphicsScene(self))
-        self.setSceneRect(0, 0, 800, 600)
-        self.setRenderHints(
-            QPainter.RenderHint.Antialiasing
-            | QPainter.RenderHint.TextAntialiasing
-            | QPainter.RenderHint.SmoothPixmapTransform
-        )
-        # self.automata = Automata()
+        self.view = AutomataGraphView(self)
 
-        self.nodes: dict[str, Node] = {}  # словарь узел-имя
-        self.selected_nodes = []  # выделенные узлы для соединения
+        self.side_widgets = QWidget()
+        self.side_widgets.setFixedHeight(200)
 
-    def mousePressEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton:
-            super().mousePressEvent(event)
+        self.input_alphabet_title = QLabel("Input alphabet", self)
+        self.output_alphabet_title = QLabel("Output alphabet", self)
+        self.initial_state_title = QLabel("Initial state", self)
+
+        self.input_alphabet_enter = QTextEdit(self)
+        self.output_alphabet_enter = QTextEdit(self)
+        self.initial_state_enter = QTextEdit(self)
+
+        self.verify_button = QPushButton("Verify", self)
+
+        self.input_alphabet_enter.setPlaceholderText("{0, 1, ..., 3} = {0, 1, 2, 3}")
+        self.output_alphabet_enter.setPlaceholderText("{0, 1, ..., 3} = {0, 1, 2, 3}")
+        self.initial_state_enter.setPlaceholderText("initial state")
+
+        text_layout = QVBoxLayout()
+        self.side_widgets.setLayout(text_layout)
+
+        text_layout.setSpacing(5)
+        text_layout.addWidget(self.input_alphabet_title)
+        text_layout.addWidget(self.input_alphabet_enter)
+
+        text_layout.addWidget(self.output_alphabet_title)
+        text_layout.addWidget(self.output_alphabet_enter)
+
+        text_layout.addWidget(self.initial_state_title)
+        text_layout.addWidget(self.initial_state_enter)
+
+        text_layout.addWidget(self.verify_button)
+
+        general_layout = QHBoxLayout()
+        general_layout.addStretch(1)
+        general_layout.addWidget(self.view)
+        general_layout.addWidget(self.side_widgets)
+
+        self.setLayout(general_layout)
+
+    def verify_button_click(self):
+        automata = self.view.to_automata()
+        if automata.verify():
+            msg = "Automata is correct"
+        else:
+            msg = "Automata isn't correct"
+        QMessageBox.warning(msg)
+
+
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        lang.current_lang = "ru"
+        self.setWindowTitle("QTabWidget с QGraphicsView")
+        self.resize(800, 600)
+
+        main_layout = QVBoxLayout()
+        self.setLayout(main_layout)
+
+        # Создаем QTabWidget
+        self.tab_widget = QTabWidget()
+        main_layout.addWidget(self.tab_widget)
+
+        # Создаем кнопки
+        button_layout = QHBoxLayout()
+        self.btn_add = QPushButton("Add AutomataGraphView")
+        self.btn_switch = QPushButton("Switch to Next Tab")
+        button_layout.addWidget(self.btn_add)
+        button_layout.addWidget(self.btn_switch)
+        main_layout.addLayout(button_layout)
+
+        # Обработчики
+        self.btn_add.clicked.connect(self.add_graph_view)
+        self.btn_switch.clicked.connect(self.switch_to_next_tab)
+
+    def add_graph_view(self):
+        # Создаем экземпляр нашего виджета вкладки
+        tab_content = TabWidget()
+
+        # Добавляем его как новую вкладку
+        tab_name = f"View {self.tab_widget.count() + 1}"
+        self.tab_widget.addTab(tab_content, tab_name)
+
+        # Переключаемся на новую вкладку
+        self.tab_widget.setCurrentWidget(tab_content)
+
+    def switch_to_next_tab(self):
+        count = self.tab_widget.count()
+        if count == 0:
             return
-        scene_pos = self.mapToScene(event.position().toPoint())
-        items = self.scene().items(scene_pos)
-        node_clicked, edge_clicked = None, None
-        for item in items:
-            if isinstance(item, Node):
-                node_clicked = item
-            if isinstance(item, Edge):
-                edge_clicked = item
 
-        if node_clicked:
-            # Обработка выделения узла
-            if node_clicked in self.selected_nodes:
-                node_clicked.setSelected(False)
-                self.selected_nodes.remove(node_clicked)
-            else:
-                if len(self.selected_nodes) < 2:
-                    node_clicked.setSelected(True)
-                    self.selected_nodes.append(node_clicked)
-                # Если выбрали два узла - создаём связь
-                if len(self.selected_nodes) == 2:
-                    self.create_edge(self.selected_nodes[0], self.selected_nodes[1])
-                    # Снимаем выделение
-                if len(self.selected_nodes) >= 2:
-                    for n in self.selected_nodes:
-                        n.setSelected(False)
-                    self.selected_nodes.clear()
-
-        if edge_clicked:
-            # Обработка выделения ребра - пердаем управление обработчику клика ребра
-            super().mousePressEvent(event)
-
-        if not edge_clicked and not node_clicked:
-            # Клик по пустому месту — добавляем новый узел в место клика
-            pos = event.position().toPoint()
-            name = f"s{len(self.nodes)}"
-            new_node = Node(name, pos.x(), pos.y())
-            self.scene().addItem(new_node)
-            self.nodes[name] = new_node
-
-    def create_edge(self, node1, node2):
-        in_, out_ = self.enter_weight()
-        edge = Edge(in_, out_, node1, node2)
-        # Добавляем линию на сцену и в списки связных узлов
-        node1.edges.append(edge)
-        node2.edges.append(edge)
-        self.scene().addItem(edge)
-        edge.update_path()
-
-    @staticmethod
-    def enter_weight():
-        input_field = MultipleInputDialog("Вход", "Выход:")
-        return input_field.getValues()
-
-
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Граф с перемещаемыми узлами (PyQt6)")
-        self.view = GraphView()
-        self.setCentralWidget(self.view)
-        # self.resize(800, 600)
+        current_index = self.tab_widget.currentIndex()
+        next_index = (current_index + 1) % count
+        self.tab_widget.setCurrentIndex(next_index)
 
 
 if __name__ == "__main__":
