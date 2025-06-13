@@ -1,0 +1,443 @@
+/* Общие стили */
+QWidget {
+    background-color: #ffffff; /* Светлый фон */
+    color: #232629; /* Темный текст */
+    font-family: "Segoe UI", sans-serif; /* Типичный шрифт KDE */
+    font-size: 10pt;
+}
+
+/* QMainWindow */
+QMainWindow::separator {
+    background-color: #d0d0d0;
+    color: #232629;
+}
+
+QMainWindow::separator:hover {
+    background-color: #c0c0c0;
+}
+
+/* QMenuBar */
+QMenuBar {
+    background-color: #ffffff;
+    color: #232629;
+    border: none;
+}
+
+QMenuBar::item {
+    background-color: transparent;
+    padding: 4px 8px;
+}
+
+QMenuBar::item:selected {
+    background-color: #c0c0c0;
+}
+
+QMenuBar::item:pressed {
+    background-color: #d0d0d0;
+}
+
+/* QMenu */
+QMenu {
+    background-color: #ffffff;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    margin: 0px;
+}
+
+QMenu::item {
+    background-color: transparent;
+    padding: 4px 24px 4px 24px;
+    margin: 0px;
+    border-bottom: 1px solid #d0d0d0;
+}
+
+QMenu::item:selected {
+    background-color: #c0c0c0;
+}
+
+QMenu::item:disabled {
+    color: #a0a0a0;
+}
+
+QMenu::icon {
+    margin-left: 5px;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #d0d0d0;
+    margin: 5px 0;
+}
+
+/* QToolBar */
+QToolBar {
+    background-color: #ffffff;
+    border: none;
+    padding: 2px;
+}
+
+QToolBar::handle {
+    background: transparent;
+    border: none;
+}
+
+/* QPushButton */
+QPushButton {
+    background-color: #e0e0e0;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    padding: 5px 10px;
+    border-radius: 3px;
+}
+
+QPushButton:hover {
+    background-color: #c0c0c0;
+    border-color: #c0c0c0;
+}
+
+QPushButton:pressed {
+    background-color: #f0f0f0;
+    border-color: #f0f0f0;
+}
+
+QPushButton:disabled {
+    background-color: #f0f0f0;
+    color: #a0a0a0;
+    border-color: #d0d0d0;
+}
+
+/* QLineEdit */
+QLineEdit {
+    background-color: #f0f0f0;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    padding: 3px;
+    border-radius: 3px;
+    selection-background-color: #3daee9; /* Типичный цвет выделения KDE */
+}
+
+/* QTextEdit */
+QTextEdit {
+    background-color: #ffffff;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    selection-background-color: #3daee9;
+}
+
+/* QPlainTextEdit */
+QPlainTextEdit {
+    background-color: #ffffff;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    selection-background-color: #3daee9;
+}
+
+/* QTreeView & QListView */
+QTreeView, QListView {
+    background-color: #ffffff;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    show-decoration-selected: 1;
+}
+
+QTreeView::item:selected, QListView::item:selected {
+    background-color: #3daee9;
+    color: #ffffff; /* Светлый текст для выделенного элемента */
+}
+
+QTreeView::item:hover, QListView::item:hover {
+    background-color: #e0e0e0;
+}
+
+QTreeView::branch:has-children:!has-siblings:closed,
+QTreeView::branch:closed:has-children:has-siblings {
+    border-image: none;
+    image: url(:/icons/tree_closed.png); /* Замените на иконку закрытой ветки */
+}
+
+QTreeView::branch:open:has-children:!has-siblings,
+QTreeView::branch:open:has-children:has-siblings  {
+    border-image: none;
+    image: url(:/icons/tree_open.png); /* Замените на иконку открытой ветки */
+}
+
+/* QTabWidget */
+QTabWidget::pane {
+    border: 1px solid #d0d0d0;
+    background-color: #ffffff;
+}
+
+QTabWidget::tab-bar {
+    left: 5px;
+}
+
+QTabBar::tab {
+    background-color: #e0e0e0;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    border-bottom-color: transparent;
+    padding: 5px 15px;
+    margin-left: 2px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}
+
+QTabBar::tab:selected {
+    background-color: #ffffff;
+    border-color: #d0d0d0;
+    border-bottom-color: #ffffff;
+}
+
+QTabBar::tab:!selected {
+    margin-top: 3px;
+}
+
+QTabBar::tab:hover {
+    background-color: #c0c0c0;
+}
+
+/* QScrollBar */
+QScrollBar:vertical {
+    background-color: #e0e0e0;
+    width: 12px;
+    margin: 16px 0 16px 0;
+    border: none;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #c0c0c0;
+    min-height: 20px;
+    border-radius: 6px;
+}
+
+QScrollBar::add-line:vertical {
+    border: none;
+    background: none;
+    height: 16px;
+    subcontrol-position: bottom;
+    subcontrol-origin: margin;
+}
+
+QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 16px;
+    subcontrol-position: top;
+    subcontrol-origin: margin;
+}
+
+QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {
+    border: none;
+    background: none;
+    image: url(:/icons/arrow_up.png); /* Замените на иконки стрелок */
+}
+
+QScrollBar::down-arrow:vertical {
+    image: url(:/icons/arrow_down.png);
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QScrollBar:horizontal {
+    background-color: #e0e0e0;
+    height: 12px;
+    margin: 0 16px 0 16px;
+    border: none;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #c0c0c0;
+    min-width: 20px;
+    border-radius: 6px;
+}
+
+QScrollBar::add-line:horizontal {
+    border: none;
+    background: none;
+    width: 16px;
+    subcontrol-position: right;
+    subcontrol-origin: margin;
+}
+
+QScrollBar::sub-line:horizontal {
+    border: none;
+    background: none;
+    width: 16px;
+    subcontrol-position: left;
+    subcontrol-origin: margin;
+}
+
+QScrollBar::left-arrow:horizontal, QScrollBar::right-arrow:horizontal {
+    border: none;
+    background: none;
+    image: url(:/icons/arrow_left.png); /* Замените на иконки стрелок */
+}
+
+QScrollBar::right-arrow:horizontal {
+    image: url(:/icons/arrow_right.png);
+}
+
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+}
+
+/* QComboBox */
+QComboBox {
+    background-color: #f0f0f0;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    border-radius: 3px;
+    padding: 3px;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 15px;
+    border-left-width: 1px;
+    border-left-color: #d0d0d0;
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow.png); /* Замените на иконку стрелки вниз */
+}
+
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    selection-background-color: #3daee9;
+}
+
+/* QStatusBar */
+QStatusBar {
+    background-color: #ffffff;
+    color: #232629;
+    border-top: 1px solid #d0d0d0;
+}
+
+QStatusBar::item {
+    border: none;
+    border-right: 1px solid #d0d0d0;
+    padding: 3px 5px;
+    margin: 0;
+}
+
+/* QToolTip */
+QToolTip {
+    background-color: #f0f0f0;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    padding: 2px;
+    opacity: 200;
+}
+
+/* QMessageBox */
+QMessageBox {
+    background-color: #ffffff;
+    color: #232629;
+}
+
+QMessageBox QLabel {
+    color: #232629;
+}
+
+/* QSlider */
+QSlider::groove:horizontal {
+    border: 1px solid #d0d0d0;
+    height: 8px;
+    background: #d0d0d0;
+    margin: 2px 0;
+    border-radius: 4px;
+}
+
+QSlider::handle:horizontal {
+    background: #c0c0c0;
+    border: 1px solid #c0c0c0;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0;
+    border-radius: 8px;
+}
+
+QSlider::groove:vertical {
+    border: 1px solid #d0d0d0;
+    width: 8px;
+    background: #d0d0d0;
+    margin: 0 2px;
+    border-radius: 4px;
+}
+
+QSlider::handle:vertical {
+    background: #c0c0c0;
+    border: 1px solid #c0c0c0;
+    width: 16px;
+    height: 16px;
+    margin: 0 -8px;
+    border-radius: 8px;
+}
+
+/* QCheckBox */
+QCheckBox {
+    spacing: 5px;
+}
+
+QCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+}
+
+QCheckBox::indicator:unchecked {
+    border: 1px solid #d0d0d0;
+    background: #ffffff;
+}
+
+QCheckBox::indicator:checked {
+    background: #3daee9;
+    border: 1px solid #3daee9;
+}
+
+QCheckBox::indicator:hover {
+    border: 1px solid #c0c0c0;
+}
+
+/* QRadioButton */
+QRadioButton {
+    spacing: 5px;
+}
+
+QRadioButton::indicator {
+    width: 13px;
+    height: 13px;
+}
+
+QRadioButton::indicator:unchecked {
+    border: 1px solid #d0d0d0;
+    background: #ffffff;
+    border-radius: 6px;
+}
+
+QRadioButton::indicator:checked {
+    background: #3daee9;
+    border: 1px solid #3daee9;
+    border-radius: 6px;
+}
+
+QRadioButton::indicator:hover {
+    border: 1px solid #c0c0c0;
+}
+
+/*QGraphicsView*/
+QGraphicsView {
+    background-color: white; /* Общий белый фон */
+    border: 0.5px solid #363232; /* Убираем рамку */
+}
+
+QGraphicsView::viewport {
+    background: white; /* Белый фон для области просмотра */
+}

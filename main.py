@@ -3,70 +3,15 @@ import sys
 from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
-    QLabel,
-    QMessageBox,
     QPushButton,
     QTabWidget,
-    QTextEdit,
     QVBoxLayout,
-    QWidget,
+    QWidget,QWhatsThis
 )
 
 import lang
-from graphics import AutomataGraphView
-
-
-class TabWidget(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.view = AutomataGraphView(self)
-
-        self.side_widgets = QWidget()
-        self.side_widgets.setFixedHeight(200)
-
-        self.input_alphabet_title = QLabel("Input alphabet", self)
-        self.output_alphabet_title = QLabel("Output alphabet", self)
-        self.initial_state_title = QLabel("Initial state", self)
-
-        self.input_alphabet_enter = QTextEdit(self)
-        self.output_alphabet_enter = QTextEdit(self)
-        self.initial_state_enter = QTextEdit(self)
-
-        self.verify_button = QPushButton("Verify", self)
-
-        self.input_alphabet_enter.setPlaceholderText("{0, 1, ..., 3} = {0, 1, 2, 3}")
-        self.output_alphabet_enter.setPlaceholderText("{0, 1, ..., 3} = {0, 1, 2, 3}")
-        self.initial_state_enter.setPlaceholderText("initial state")
-
-        text_layout = QVBoxLayout()
-        self.side_widgets.setLayout(text_layout)
-
-        text_layout.setSpacing(5)
-        text_layout.addWidget(self.input_alphabet_title)
-        text_layout.addWidget(self.input_alphabet_enter)
-
-        text_layout.addWidget(self.output_alphabet_title)
-        text_layout.addWidget(self.output_alphabet_enter)
-
-        text_layout.addWidget(self.initial_state_title)
-        text_layout.addWidget(self.initial_state_enter)
-
-        text_layout.addWidget(self.verify_button)
-
-        general_layout = QHBoxLayout()
-        general_layout.addStretch(1)
-        general_layout.addWidget(self.view)
-        general_layout.addWidget(self.side_widgets)
-
-        self.setLayout(general_layout)
-
-    def verify_button_click(self):
-        automata = self.view.to_automata()
-        if automata.verify():
-            msg = "Automata is correct"
-        else:
-            msg = "Automata isn't correct"
-        QMessageBox.warning(msg)
+from tab import AutomataTabWidget
+from tools import utiles
 
 
 class MainWindow(QWidget):
@@ -74,22 +19,29 @@ class MainWindow(QWidget):
         super().__init__()
         lang.current_lang = "ru"
         self.setWindowTitle("QTabWidget с QGraphicsView")
-        self.resize(800, 600)
+        self.resize(850, 720)
 
-        main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout(self)
         self.setLayout(main_layout)
 
         # Создаем QTabWidget
-        self.tab_widget = QTabWidget()
+        self.tab_widget = QTabWidget(self)
         main_layout.addWidget(self.tab_widget)
 
         # Создаем кнопки
-        button_layout = QHBoxLayout()
-        self.btn_add = QPushButton("Add AutomataGraphView")
-        self.btn_switch = QPushButton("Switch to Next Tab")
+        button_layout = QHBoxLayout(self)
+        self.btn_add = QPushButton("Add AutomataGraphView", self)
+        self.btn_switch = QPushButton("Switch to Next Tab", self)
+
         button_layout.addWidget(self.btn_add)
         button_layout.addWidget(self.btn_switch)
         main_layout.addLayout(button_layout)
+
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addStretch()  # чтобы сдвинуть кнопку вправо
+        self.errors_button = QPushButton(self)
+        bottom_layout.addWidget(self.errors_button)
+        main_layout.addLayout(bottom_layout)
 
         # Обработчики
         self.btn_add.clicked.connect(self.add_graph_view)
@@ -97,7 +49,7 @@ class MainWindow(QWidget):
 
     def add_graph_view(self):
         # Создаем экземпляр нашего виджета вкладки
-        tab_content = TabWidget()
+        tab_content = AutomataTabWidget()
 
         # Добавляем его как новую вкладку
         tab_name = f"View {self.tab_widget.count() + 1}"
@@ -119,5 +71,11 @@ class MainWindow(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
+
+    stylesheet = utiles.load_stylesheets()
+    
+    window.setStyleSheet(stylesheet)
     window.show()
+    QWhatsThis.enterWhatsThisMode()
+
     sys.exit(app.exec())

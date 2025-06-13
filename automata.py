@@ -9,8 +9,8 @@ class Automata:
         input_alphabet: Sequence[str] = None,
         output_alphabet: Sequence[str] = None,
     ):
-        if states and initial_state not in self.states:
-            raise ValueError("Start state must be in given states")
+        if states and initial_state not in states:
+            raise ValueError("Initial state must be in given states")
 
         self.states = set(states) if states else None
         self.initial_state_ = initial_state
@@ -53,20 +53,6 @@ class Automata:
             return False
         self.initial_state_ = state
         return True
-    
-    def verify(self) -> bool:
-        if not self.initial_state:
-            return False
-        
-        n = len(self.input_alphabet)
-        m = len(self.states)
-        if len(self.transitions) != n or len(self.output_function) != n:
-            return False
-
-        transitions_valid = all(len(t) == m for t in self.transitions.values())
-        output_valid = all(len(outs) == m for outs in self.output_function.values())
-
-        return output_valid or transitions_valid
 
     def add_transition(
         self, input_symbol: str, input_state: str, output_state: str, output_symbol: str
@@ -113,3 +99,20 @@ class Automata:
         out_ = sum(self.output_alphabet[out[i]] / m**i for i in range(1, len(out) + 1))
 
         return in_, out_
+    
+    def detailed_verificatin(self) -> list[str]:
+        errors = []
+        if not self.initial_state:
+            errors.append("There is no initial state")
+        
+        for state, tranistions in self.transitions.items():
+            diff = self.input_alphabet.keys() - tranistions.keys()
+            if len(diff) != 0:
+                errors.append(f"State {state} must have transition for {diff} input symbols")
+        
+        for state, tranistions in self.transitions.items():
+            diff = self.input_alphabet.keys() - tranistions.keys()
+            if len(diff) != 0:
+                errors.append(f"State {state} must have output for {diff} input alphabet")
+
+        return errors 

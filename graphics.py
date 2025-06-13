@@ -1,33 +1,36 @@
 import math
+from typing import Any
 
-from PyQt6.QtCore import QPoint, QPointF, Qt
+from PyQt6.QtCore import QPoint, QPointF, Qt, QRectF
 from PyQt6.QtGui import (
     QAction,
     QBrush,
     QColor,
     QFont,
+    QMouseEvent,
     QPainter,
     QPainterPath,
     QPainterPathStroker,
     QPen,
     QPolygonF,
-    QMouseEvent,
+    QResizeEvent,
+    QWheelEvent,
 )
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsScene,
+    QGraphicsSceneMouseEvent,
     QGraphicsTextItem,
     QGraphicsView,
     QMenu,
     QMessageBox,
-    QGraphicsSceneMouseEvent,
     QWidget,
 )
 
 from automata import Automata
-from tools import EditableTextItem, MultipleInputDialog
+from tools.widgets import EditableTextItem, MultipleInputDialog
 
 
 class Node(QGraphicsEllipseItem):
@@ -36,10 +39,9 @@ class Node(QGraphicsEllipseItem):
     ) -> None:
         super().__init__(-radius, -radius, 2 * radius, 2 * radius)
         self.name = name
-        self.in_edges: dict[str, Edge] = {}  # ребра, исходящие из узла
+        self.in_edges: dict[str, Edge] = {}  # ребра, входящие в узел
         self.out_edges: dict[str, Edge] = {}  # ребра, исходящие из узла
 
-        # self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
         self.setBrush(QBrush(Qt.GlobalColor.cyan))
         self.setPen(QPen(Qt.GlobalColor.black))
         self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)
@@ -51,15 +53,17 @@ class Node(QGraphicsEllipseItem):
 
         self.name_text_item = QGraphicsTextItem(self.name, self)
         self.name_text_item.setFont(QFont("Arial", 11))
+
         doc = self.name_text_item.document()
         doc.setDocumentMargin(0)  # Убирает отступы вокруг текста
+
         text_rect = self.name_text_item.boundingRect()
         center = self.rect().center()
         self.name_text_item.setPos(
             center.x() - text_rect.width() / 2, center.y() - text_rect.height() / 2
         )
 
-    def itemChange(self, change, value) -> None:
+    def itemChange(self, change, value) -> Any:
         if change == self.GraphicsItemChange.ItemPositionHasChanged:
             for edge in self.in_edges.values():
                 edge.update_path()
@@ -97,6 +101,8 @@ class Edge(QGraphicsPathItem):
         return set(self.input_output_table)
 
     def output(self, input_value: str) -> list[str]:
+        if input_value not in self.input_output_table:
+            raise KeyError("Input value not in input-output table")
         return self.input_output_table[input_value]
 
     @property
@@ -272,33 +278,50 @@ class AutomataGraphView(QGraphicsView):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setScene(QGraphicsScene(self))
-        self.setSceneRect(0, 0, 700, 500)
-        self.setFixedSize(720, 520)
+        self.fitInView(QRectF(0, 0, self.height()/25, self.width()/25), Qt.AspectRatioMode.KeepAspectRatio)
+        self.setWhatsThis("Это описание данного виджета или кнопки.")
+
         self.setRenderHints(
             QPainter.RenderHint.Antialiasing
             | QPainter.RenderHint.TextAntialiasing
             | QPainter.RenderHint.SmoothPixmapTransform
         )
-
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
         self.customContextMenuRequested.connect(self.context_menu)
         self.initial_state: Node = None
 
         self.nodes: dict[str, Node] = {}  # словарь имя-узел
         self.edges: list[Edge] = []
         self.selected_nodes: list[Node] = []  # выделенные узлы для соединения
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    def mousePressEvent(self, event) -> None:
+        super().mousePressEvent(event)
+        # После начала перетаскивания вернуть курсор стрелки
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    def mouseReleaseEvent(self, event) -> None:
+        super().mouseReleaseEvent(event)
+        # После отпускания кнопки вернуть курсор стрелки
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent | None) -> None:
         scene_pos = self.mapToScene(event.position().toPoint())
         items = self.scene().items(scene_pos)
         if len(items) == 0:
             # Клик по пустому месту — добавляем новый узел в место клика
-            pos = event.position().toPoint()
             name = f"S{len(self.nodes)}"
-            new_node = Node(name, pos.x(), pos.y())
+            new_node = Node(name, scene_pos.x(), scene_pos.y())
             self.scene().addItem(new_node)
             self.nodes[name] = new_node
-        return super().mouseDoubleClickEvent(event)
+        super().mouseDoubleClickEvent(event)
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
     def context_menu(self, point: QPoint) -> None:
         items = self.scene().items(self.mapToScene(point))
@@ -321,16 +344,30 @@ class AutomataGraphView(QGraphicsView):
 
     def node_actions(self, node: Node) -> list[QAction]:
         def delete_node():
+            nonlocal node
             for in_node in list(node.in_edges.keys()):
-                self.scene().removeItem(node.in_edges[in_node])
+                # Удаляем текущий узел (принимающий)
+                # из ребер узла, из которого оно исходит
+                edge = node.in_edges[in_node]
+                edge.source.out_edges.pop(in_node)
+
+                # Удаляем само реберо
                 node.in_edges.pop(in_node)
+                self.scene().removeItem(edge)
 
             for out_node in list(node.out_edges.keys()):
-                self.scene().removeItem(node.out_edges[out_node])
-                node.out_edges.pop(out_node)
+                # Удаляем текущий узел (источник)
+                # из ребер узла, в которое ребро входит
+                edge = node.out_edges[out_node]
+                edge.destination.in_edges.pop(out_node)
 
+                node.out_edges.pop(out_node)
+                self.scene().removeItem(edge)
+
+            # Удаляем узел реберо
             self.nodes.pop(node.name)
             self.scene().removeItem(node)
+            del node
 
         def edit_node():
             old_name = node.name
@@ -383,16 +420,19 @@ class AutomataGraphView(QGraphicsView):
         return [delete_action, edit_action, make_initial_action, add_edge_action]
 
     def edge_actions(self, edge: Edge) -> list[QAction]:
+        def delete_edge():
+            nonlocal edge
+            edge.source.out_edges.pop(edge.destination.name)
+            edge.destination.in_edges.pop(edge.source.name)
+            self.scene().removeItem(edge)
+            del edge
+
         def edit_edge():
             values = self.enter_edge()
             if not values or len(values) < 2:
                 return
-            edge.input_value, edge.output_value = values
-
-        def delete_edge():
-            edge.source.out_edges.pop(edge.destination.name)
-            edge.destination.in_edges.pop(edge.source.name)
-            self.scene().removeItem(edge)
+            in_, out_ = values
+            edge.add_transition(in_, out_)
 
         def new_transition():
             values = self.enter_edge()
@@ -432,6 +472,49 @@ class AutomataGraphView(QGraphicsView):
         input_field = MultipleInputDialog("Вход", "Выход:")
         return input_field.getValues()
 
+    def wheelEvent(self, event: QWheelEvent | None) -> None:
+        # Check if Ctrl key is pressed
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            zoom_direction = event.angleDelta().y() > 0
+            self.zoom_scene(zoom_direction, event.position())
+        return super().wheelEvent(event)
+
+    def zoom_scene(
+        self, zoom_direction: bool, pos: QPointF, zoom_in_factor: float = 1.25
+    ) -> None:
+        """If zoom_direction is True then the scene is zoomed in else zoomed out"""
+
+        # Save the scene position under mouse
+        old_pos = self.mapToScene(pos.toPoint())
+
+        # Determine zoom factor based on wheel direction
+        zoom_factor = zoom_in_factor if zoom_direction else 1 / zoom_in_factor
+
+        # Apply scaling
+        self.blockSignals(True)
+        self.scale(zoom_factor, zoom_factor)
+        self.blockSignals(False)
+        # Get new position after scaling
+        new_pos = self.mapToScene(pos.toPoint())
+
+        # Move view to keep mouse position stable
+        delta = new_pos - old_pos
+        self.translate(delta.x(), delta.y())
+
+    # def resizeEvent(self, event: QResizeEvent | None) -> None:
+    #     old_size, new_size = event.oldSize(), event.size()  
+    #     self.blockSignals(True)
+    #     old_ratio, new_ratio = (
+    #         math.sqrt(old_size.width() ** 2 + old_size.height()),
+    #         math.sqrt(new_size.width() ** 2 + new_size.height()),
+    #     )
+    #     diff = old_size - new_size
+    #     self.zoom_scene(
+    #         diff.width() < 0, self.sceneRect().center(), old_ratio/new_ratio
+    #     )
+    #     self.blockSignals(False)
+    #     return super().resizeEvent(event)
+
     def to_automata(self) -> Automata:
         inputs, outputs = [], []
         for edge in self.edges:
@@ -447,4 +530,4 @@ class AutomataGraphView(QGraphicsView):
                     for out_ in edge.output(in_):
                         automata.add_transition(in_, name, dest_name, out_)
 
-        return Automata
+        return automata
