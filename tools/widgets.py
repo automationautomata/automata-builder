@@ -93,85 +93,76 @@ class EditableTextItem(QGraphicsTextItem):
     #     return super().mousePressEvent(event)
 
 
-class VerticalMessagesWidget(QScrollArea):
-    def __init__(
-        self,
-        parent: QWidget | None = None,
-        *messages: tuple[str],
-    ) -> None:
+class VerticalMessagesWidget(QWidget):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.container = QWidget(self)
+        self.main_layout = QVBoxLayout(self)
 
-        self.setWidget(self.container)
-
-        self.container_layout = QVBoxLayout(self.container)
-        self.container_layout.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
+        # Создаём область с прокруткой
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )
-        self.container_layout.setDirection(QVBoxLayout.Direction.Down)
+        # scrollbar = self.scroll_area.verticalScrollBar()
 
-        self.setWidgetResizable(True)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Внутренний контейнер для сообщений
+        self.messages_container = QWidget()
+        # self.messages_container.setMinimumHeight(self.height())
+        # self.messages_container.setMinimumWidth(self.width() - scrollbar.width())
 
-        self.labels_: list[QLabel] = [None] * len(messages)
-        for i, message in enumerate(messages):
-            self.labels_[i] = QLabel(text=message)
-            self.container_layout.addWidget(self.labels_[i])
+        self.messages_layout = QVBoxLayout()
+        self.messages_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.messages_layout.setDirection(QVBoxLayout.Direction.Down)
+        self.messages_container.setLayout(self.messages_layout)
 
-            self.labels_[i].setWordWrap(True)
-            self.labels_[i].adjustSize()
-            self.labels_[i].setAlignment(
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
-            )
-            self.labels_[i].setScaledContents(True)
-            self.labels_[i].setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.scroll_area.setWidget(self.messages_container)
 
-        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
-        self.verticalScrollBar().setMaximumWidth(7)
+        # Добавляем область прокрутки в основной макет
+        self.main_layout.addWidget(self.scroll_area)
 
-    def resizeEvent(self, a0) -> None:
-        self.blockSignals(True)
-        scrol_bar_width = self.verticalScrollBar().width()
-        self.container.setMaximumWidth(self.width() - 2*scrol_bar_width)
-        self.verticalScrollBar().setMaximumHeight(self.height())
-        self.blockSignals(False)
-        return super().resizeEvent(a0)
+        # Храним список сообщений для обновления ширины при ресайзе
+        self.labels: list[QLabel] = []
 
     @property
     def count(self) -> int:
-        return len(self.labels_)
+        return len(self.labels)
 
-    def add_message(self, message: str) -> None:
-        label = QLabel(text=message)
-        self.container_layout.addWidget(label)
-        self.labels_.append(label)
-        
-        label.adjustSize()
-        label.setWordWrap(True)
-        label.setScaledContents(True)
-        
+    @property
+    def scrollbar(self) -> int:
+        return self.scroll_area.verticalScrollBar()
+
+    @property
+    def container(self) -> QWidget:
+        return self.messages_container
+
+    def add_message(self, text: str) -> None:
+        label = QLabel(text)
         label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        scrol_bar_width = self.verticalScrollBar().width()
-        label.setMaximumWidth(self.width() - 2*scrol_bar_width)
-        
-        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+        # label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        label.setWordWrap(True)
+
+        self.messages_layout.addWidget(label)
+        self.labels.append(label)
+
+        scrollbar = self.scroll_area.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
 
     def get_message(self, message_pos: int) -> QLabel:
-        return self.labels_[message_pos]
+        return self.labels[message_pos]
 
     def remove_message(self, message_pos: int) -> None:
         if message_pos > len(self.labels_):
             raise ValueError(
                 "The message position must be less than the number of messages"
             )
-        label = self.labels_[message_pos]
+        label = self.labels[message_pos]
         self.layout().removeWidget(label)
-        self.labels_.pop(message_pos)
+        self.labels.pop(message_pos)
         label.deleteLater()
 
     def clear(self) -> None:
-        while len(self.labels_) >= 0:
-            label = self.labels_.pop()
+        while len(self.labels) > 0:
+            label = self.labels.pop()
             self.layout().removeWidget(label)
             label.deleteLater()

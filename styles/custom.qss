@@ -1,22 +1,26 @@
-QTabWidget {
+AutomataTabWidget {
     padding: 0px;
     margin: 0px;
+    background-color: #ffffff; /* Светлый фон */
+
+}
+
+SidePanel QWidget {
+    background-color: #83bbaeab;
 }
 
 QScrollArea {
-    background-color: #f2897671;
     border: 1px solid #83e816;
     font-weight: bold;
 }
 
 SidePanel QScrollArea QLabel {
-
     border-radius: 4px;
     padding: 7px 2px 9px 3px;
-    font-family: BlinkMacSystemFont, "San Francisco", Helvetica, Arial, sans-serif;
+    font-family: sans-serif;
     color: #1d1d1f;
     opacity: 0;
-    font-size: 14px;
+    font-size: 12px;
     background-color: #5ef91505; 
 }
 

@@ -2,7 +2,7 @@
 QWidget {
     background-color: #ffffff; /* Светлый фон */
     color: #232629; /* Темный текст */
-    font-family: "Segoe UI", sans-serif; /* Типичный шрифт KDE */
+    font-family: sans-serif; /* Типичный шрифт KDE */
     font-size: 10pt;
 }
 

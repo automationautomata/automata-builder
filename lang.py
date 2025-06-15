@@ -11,7 +11,7 @@ def load_locales(path):
     """
     # Find all YAML files in the directory
     yaml_files = [
-        f for f in os.listdir(path) if f.endswith(".yml") or f.endswith(".yaml")
+        f for f in os.listdir(path) if f.endswith((".yml", ".yaml"))
     ]
 
     # If no YAML files are found, return an empty dictionary
