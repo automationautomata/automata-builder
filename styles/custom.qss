@@ -1,3 +1,15 @@
+/*QGraphicsView*/
+AutomataGraphView {
+    background-color: white; /* Общий белый фон */
+    border: 0.5px solid #363232; /* Убираем рамку */
+    margin: 4px;
+}
+
+AutomataGraphView::viewport {
+    background: white; /* Белый фон для области просмотра */
+}
+
+
 AutomataTabWidget {
     padding: 0px;
     margin: 0px;

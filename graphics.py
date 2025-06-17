@@ -1,19 +1,20 @@
+import json
 import math
 from typing import Any
 
-from PyQt6.QtCore import QPoint, QPointF, Qt, QRectF
+from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
 from PyQt6.QtGui import (
     QAction,
     QBrush,
     QColor,
     QFont,
+    QKeyEvent,
     QMouseEvent,
     QPainter,
     QPainterPath,
     QPainterPathStroker,
     QPen,
     QPolygonF,
-    QResizeEvent,
     QWheelEvent,
 )
 from PyQt6.QtWidgets import (
@@ -26,11 +27,17 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QMenu,
     QMessageBox,
+    QPushButton,
     QWidget,
 )
 
 from automata import Automata
-from tools.widgets import EditableTextItem, MultipleInputDialog
+from tools.utiles import save_view
+from tools.widgets import (
+    EditableTextItem,
+    TableInputDialog,
+    VerticalInputDialog,
+)
 
 
 class Node(QGraphicsEllipseItem):
@@ -44,10 +51,10 @@ class Node(QGraphicsEllipseItem):
 
         self.setBrush(QBrush(Qt.GlobalColor.cyan))
         self.setPen(QPen(Qt.GlobalColor.black))
-        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable)
-        self.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(
-            QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
+            QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable
+            | QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
+            | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
         )
         self.setPos(x, y)
 
@@ -63,6 +70,9 @@ class Node(QGraphicsEllipseItem):
             center.x() - text_rect.width() / 2, center.y() - text_rect.height() / 2
         )
 
+    def has_loop(self):
+        return self.name in self.in_edges
+
     def itemChange(self, change, value) -> Any:
         if change == self.GraphicsItemChange.ItemPositionHasChanged:
             for edge in self.in_edges.values():
@@ -71,59 +81,97 @@ class Node(QGraphicsEllipseItem):
                 edge.update_path()
         return super().itemChange(change, value)
 
+    def serialize(self):
+        return {
+            "name": self.name,
+            "x": self.pos().x(),
+            "y": self.pos().y(),
+            "radius": self.rect().width() / 2,
+        }
+
+    @staticmethod
+    def deserialize(data: dict):
+        node = Node(
+            name=data["name"], x=data["x"], y=data["y"], radius=data.get("radius", 20)
+        )
+        return node
+
 
 class Edge(QGraphicsPathItem):
     def __init__(
         self, input_value: str, output_value: str, source: Node, destination: Node
     ) -> None:
         super().__init__()
-        self.input_output_table = {input_value: [output_value]}
+        self.transitions = {input_value: [output_value]}
 
         self.source = source
         self.destination = destination
         self.is_reversed = self.destination.name in self.source.in_edges
         self.text_font = QFont("Arial", 14)
         self.setPen(QPen(Qt.GlobalColor.black, 2))
-
+        self.setFlag(
+            QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
+            | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
+        )
         self.arrow_size = 10
         self.arrow_head = None
         self.text_item: EditableTextItem = None
 
         self.create_click_area(30)
 
+    @property
+    def edge_text(self) -> str:
+        return ", ".join(
+            f"{input_} | {','.join(outputs)}"
+            for input_, outputs in self.transitions.items()
+        )
+
+    def inputs(self) -> set[str]:
+        return set(self.transitions)
+
+    def output(self, input_value: str) -> list[str]:
+        if input_value not in self.transitions:
+            raise KeyError("Input value not in input-output table")
+        return self.transitions[input_value]
+
+    def has_transition(self, input_value: str, output_value: str):
+        if input_value not in self.transitions:
+            return False
+        return output_value in self.transitions[input_value]
+
+    def add_transition(self, input_value: str, output_value: str) -> None:
+        if input_value not in self.transitions:
+            self.transitions[input_value] = []
+        elif output_value in self.transitions[input_value]:
+            return
+
+        self.transitions[input_value].append(output_value)
+        if not self.text_item:
+            return
+
+        font_size = self.text_font.pointSizeF()
+        if font_size <= 0:
+            font_size = self.text_font.pointSize()
+
+        self.text_font.setPointSizeF(font_size - 0.12)
+        self.text_item.setFont(self.text_font)
+        self.text_item.setPlainText(self.edge_text)
+
+    def remove_transition(self, input_value: str, output_value: str) -> None:
+        if input_value not in self.transitions:
+            raise ValueError()
+        if output_value in self.transitions[input_value]:
+            raise ValueError()
+
+        self.transitions[input_value].remove(output_value)
+        if len(self.transitions[input_value]) == 0:
+            del self.transitions[input_value]
+
     def create_click_area(self, width: int) -> None:
         # Создаем новую область с шириной 'width' вокруг исходного пути
         stroker = QPainterPathStroker()
         stroker.setWidth(width)
         self.click_area = stroker.createStroke(self.path())
-
-    def inputs(self) -> set[str]:
-        return set(self.input_output_table)
-
-    def output(self, input_value: str) -> list[str]:
-        if input_value not in self.input_output_table:
-            raise KeyError("Input value not in input-output table")
-        return self.input_output_table[input_value]
-
-    @property
-    def edge_text(self) -> str:
-        return ", ".join(
-            f"{input_} | {','.join(outputs)}"
-            for input_, outputs in self.input_output_table.items()
-        )
-
-    def add_transition(self, input_value: str, output_value: str) -> None:
-        if input_value not in self.input_output_table:
-            self.input_output_table[input_value] = []
-        elif output_value in self.input_output_table[input_value]:
-            return
-
-        self.input_output_table[input_value].append(output_value)
-        if self.text_item:
-            self.text_font.setPointSizeF(self.text_font.pointSizeF() - 0.12)
-
-            self.text_item.setFont(self.text_font)
-            self.text_item.setPlainText(self.edge_text)
 
     def update_path(self) -> None:
         path = QPainterPath()
@@ -198,6 +246,10 @@ class Edge(QGraphicsPathItem):
 
         # Текстовый элемент для входа
         text_item = EditableTextItem(self.edge_text, self)
+        text_item.setFlag(
+            QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
+            | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
+        )
         text_item.setDefaultTextColor(Qt.GlobalColor.red)
         text_item.setFont(self.text_font)
         text_item.setPos(mid_point + offset)
@@ -273,12 +325,103 @@ class Edge(QGraphicsPathItem):
         if event.button() == Qt.MouseButton.RightButton:
             pass
 
+    def serialize(self):
+        return {
+            "transitions": self.transitions,  # первый ключ или по необходимости
+            "source": self.source.name,
+            "destination": self.destination.name,
+        }
+
+    @staticmethod
+    def deserialize(data: dict, nodes: dict):
+        source = nodes[data["source"]]
+        dest = nodes[data["destination"]]
+        transitions = data["transitions"]
+
+        edge = Edge("", "", source, dest)
+        edge.__dict__["transitions"] = transitions
+        return edge
+
+
+class EdgeEditDialog(TableInputDialog):
+    def __init__(self, edge: Edge, title="") -> None:
+        self.transitions = []
+        for in_ in edge.inputs():
+            for out_ in edge.output(in_):
+                self.transitions.append([in_, out_])
+
+        row_labels = [[f"{r[0]}:", f"{r[1]}:"] for r in self.transitions]
+        super().__init__(*row_labels, col_titles=["Вход", "Выход"], title=title)
+
+        for i in range(len(self.transitions)):
+            delete_button = QPushButton("Удалить")
+            delete_button.clicked.connect(lambda: self.delete_transition(delete_button))
+
+            self.grid_layout.addWidget(delete_button, i + 1, 2)
+
+    def fill_empty_row(self, row_ind: int) -> None:
+        row_count = self.grid_layout.rowCount()
+        for i in range(row_ind + 1, row_count):
+            item = self.grid_layout.itemAtPosition(i, 0)
+            widget = item.widget()
+            self.grid_layout.removeWidget(widget)
+            self.grid_layout.addWidget(widget, i, 0)
+
+    def delete_transition(self, delete_button: QPushButton) -> None:
+        row_ind, _, _, _ = self.grid_layout.getItemPosition(delete_button)
+
+        in_edit, out_edit = self.line_edits.pop(row_ind - 1)
+        in_label, out_label = self.labels.pop(row_ind - 1)
+
+        # Input
+        item = self.grid_layout.itemAtPosition(row_ind, 0)
+        layout = item.layout()
+        self.grid_layout.removeItem(item)
+        in_label.deleteLater()
+        in_edit.deleteLater()
+        del layout
+
+        # Output
+        item = self.grid_layout.itemAtPosition(row_ind, 1)
+        layout = item.layout()
+        self.grid_layout.removeItem(item)
+        out_label.deleteLater()
+        out_edit.deleteLater()
+        del layout
+
+        # Button
+        self.grid_layout.removeWidget(delete_button)
+        delete_button.deleteLater()
+
+        # Lower rows move up
+        self.fill_empty_row(row_ind)
+
+        # Remove from transitions
+        self.transitions.pop(row_ind - 1)
+
+    def get_values(self) -> list[list[str]]:
+        values = super().get_values()
+        if not values:
+            return None
+
+        for i in range(len(values)):
+            if not values[i][0]:
+                values[i][0] = self.transitions[i][0]
+
+            if not values[i][1]:
+                values[i][1] = self.transitions[i][1]
+
+        return values
+
 
 class AutomataGraphView(QGraphicsView):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setScene(QGraphicsScene(self))
-        self.fitInView(QRectF(0, 0, self.height()/25, self.width()/25), Qt.AspectRatioMode.KeepAspectRatio)
+        self.fitInView(
+            QRectF(0, 0, self.height() / 5, self.width() / 5),
+            Qt.AspectRatioMode.KeepAspectRatio,
+        )
         self.setWhatsThis("Это описание данного виджета или кнопки.")
 
         self.setRenderHints(
@@ -292,7 +435,7 @@ class AutomataGraphView(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        
+
         self.customContextMenuRequested.connect(self.context_menu)
         self.initial_state: Node = None
 
@@ -301,12 +444,12 @@ class AutomataGraphView(QGraphicsView):
         self.selected_nodes: list[Node] = []  # выделенные узлы для соединения
         self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
-    def mousePressEvent(self, event) -> None:
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
         super().mousePressEvent(event)
         # После начала перетаскивания вернуть курсор стрелки
         self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
-    def mouseReleaseEvent(self, event) -> None:
+    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
         super().mouseReleaseEvent(event)
         # После отпускания кнопки вернуть курсор стрелки
         self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
@@ -322,6 +465,21 @@ class AutomataGraphView(QGraphicsView):
             self.nodes[name] = new_node
         super().mouseDoubleClickEvent(event)
         self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    def wheelEvent(self, event: QWheelEvent | None) -> None:
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            zoom_direction = event.angleDelta().y() > 0
+            self.zoom_scene(zoom_direction, event.position())
+        return super().wheelEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent | None):
+        is_s_key = event.key() == Qt.Key.Key_S
+        is_cntrl_modifier = event.modifiers() == Qt.KeyboardModifier.ControlModifier
+
+        if is_cntrl_modifier and is_s_key:
+            self.save_to_file()
+
+        return super().keyPressEvent(event)
 
     def context_menu(self, point: QPoint) -> None:
         items = self.scene().items(self.mapToScene(point))
@@ -378,46 +536,52 @@ class AutomataGraphView(QGraphicsView):
 
             new_name = node.name_text_item.toPlainText()
             if new_name != old_name and new_name in self.nodes:
-                QMessageBox.warning(self, "Узел с таким названием уже существует")
+                QMessageBox.warning(
+                    self, "Ошибка", "Узел с таким названием уже существует"
+                )
                 return
             self.nodes.pop(old_name)
             self.nodes[new_name] = node
 
         def set_initial_node():
-            color = QColor(128, 10, 90)  # Standard purple color
+            color = QColor(128, 25, 90, 180)  # Standard purple color
             if self.initial_state:
                 basic_color = node.brush().color()
                 self.initial_state.setBrush(QBrush(basic_color))
             self.initial_state = node
             node.setBrush(QBrush(color))
 
-        delete_action = QAction("Удалить", self)
-        edit_action = QAction("Редактировать", self)
-        make_initial_action = QAction("Сделать начальным", self)
-
-        delete_action.triggered.connect(delete_node)
-        edit_action.triggered.connect(edit_node)
-        make_initial_action.triggered.connect(set_initial_node)
-
         selected = [
             item for item in self.scene().selectedItems() if isinstance(item, Node)
         ]
-        if len(selected) == 0 or len(selected) > 2:
-            return [delete_action, edit_action, make_initial_action]
+        if len(selected) > 2:
+            return []
 
-        if len(selected) == 1:
-            make_loop_action = QAction("Сделать петлю", self)
-            make_loop_action.triggered.connect(lambda: self.create_edge(node, node))
-            return [delete_action, edit_action, make_initial_action, make_loop_action]
+        delete_action = QAction("Удалить", self)
+        delete_action.triggered.connect(delete_node)
+
+        edit_action = QAction("Редактировать", self)
+        edit_action.triggered.connect(edit_node)
+
+        make_initial_action = QAction("Сделать начальным", self)
+        make_initial_action.triggered.connect(set_initial_node)
+
+        actions = [delete_action, edit_action, make_initial_action]
+
+        if len(selected) == 0 or len(selected) == 1:
+            if not node.has_loop():
+                make_loop_action = QAction("Сделать петлю", self)
+                make_loop_action.triggered.connect(lambda: self.create_edge(node, node))
+                actions.append(make_loop_action)
+            return actions
 
         src: Node = selected[0] if selected[0] is not node else selected[1]
-        if src.name in node.in_edges:
-            return [delete_action, edit_action, make_initial_action]
+        if src.name not in node.in_edges:
+            add_edge_action = QAction("Соединить", self)
+            add_edge_action.triggered.connect(lambda: self.create_edge(src, node))
+            actions.append(add_edge_action)
 
-        add_edge_action = QAction("Соединить", self)
-        add_edge_action.triggered.connect(lambda: self.create_edge(src, node))
-
-        return [delete_action, edit_action, make_initial_action, add_edge_action]
+        return actions
 
     def edge_actions(self, edge: Edge) -> list[QAction]:
         def delete_edge():
@@ -428,15 +592,18 @@ class AutomataGraphView(QGraphicsView):
             del edge
 
         def edit_edge():
-            values = self.enter_edge()
-            if not values or len(values) < 2:
+            dialog = EdgeEditDialog(edge, "Редактирование")
+            values = dialog.get_values()
+            if not values:
                 return
-            in_, out_ = values
-            edge.add_transition(in_, out_)
+
+            edge.transitions = {}
+            for in_, out_ in zip(*values):
+                edge.add_transition(in_, out_)
 
         def new_transition():
             values = self.enter_edge()
-            if not values or len(values) < 2:
+            if not values or not (values[0] and values[1]):
                 return
             in_, out_ = values
             edge.add_transition(in_, out_)
@@ -453,7 +620,7 @@ class AutomataGraphView(QGraphicsView):
 
     def create_edge(self, source: Node, destination: Node) -> None:
         values = self.enter_edge()
-        if not values or len(values) < 2:
+        if not values or not (values[0] and values[1]):
             return
 
         in_, out_ = values
@@ -468,16 +635,9 @@ class AutomataGraphView(QGraphicsView):
         edge.update_path()
 
     @staticmethod
-    def enter_edge() -> None:
-        input_field = MultipleInputDialog("Вход", "Выход:")
-        return input_field.getValues()
-
-    def wheelEvent(self, event: QWheelEvent | None) -> None:
-        # Check if Ctrl key is pressed
-        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-            zoom_direction = event.angleDelta().y() > 0
-            self.zoom_scene(zoom_direction, event.position())
-        return super().wheelEvent(event)
+    def enter_edge() -> list[str]:
+        input_field = VerticalInputDialog("Вход", "Выход:")
+        return input_field.get_values()
 
     def zoom_scene(
         self, zoom_direction: bool, pos: QPointF, zoom_in_factor: float = 1.25
@@ -501,8 +661,50 @@ class AutomataGraphView(QGraphicsView):
         delta = new_pos - old_pos
         self.translate(delta.x(), delta.y())
 
+    def to_automata(self) -> Automata:
+        automata = Automata(list(self.nodes.keys()), self.initial_state)
+        for name, node in self.nodes.items():
+            for dest_name, edge in node.out_edges.items():
+                for in_ in edge.inputs():
+                    for out_ in edge.output(in_):
+                        automata.add_input_symbol(in_)
+                        automata.add_output_symbol(out_)
+                        automata.add_transition(in_, name, dest_name, out_)
+
+        automata.reset_input_order(sorted(automata.input_alphabet))
+        automata.reset_output_order(sorted(automata.output_alphabet))
+        return automata
+
+    def save_to_file(self) -> None:
+        save_view(self.serialize())
+        QMessageBox.information(self, "Notification", "saved")
+
+    def serialize(self) -> str:
+        return {
+            "nodes": [node.serialize() for node in self.nodes.values()],
+            "edges": [edge.serialize() for edge in self.edges],
+        }
+
+    @staticmethod
+    def deserialize_graph(json_str: str) -> tuple[dict[str, Node], list[Edge]]:
+        data = json.loads(json_str)
+
+        # Восстановить узлы по именам
+        nodes_dict = {}
+        for node_data in data["nodes"]:
+            node = Node.deserialize(node_data)
+            nodes_dict[node.name] = node
+
+        # Восстановить ребра
+        edges_list = []
+        for edge_data in data["edges"]:
+            edge = Edge.deserialize(edge_data, nodes_dict)
+            edges_list.append(edge)
+
+        return nodes_dict, edges_list
+
     # def resizeEvent(self, event: QResizeEvent | None) -> None:
-    #     old_size, new_size = event.oldSize(), event.size()  
+    #     old_size, new_size = event.oldSize(), event.size()
     #     self.blockSignals(True)
     #     old_ratio, new_ratio = (
     #         math.sqrt(old_size.width() ** 2 + old_size.height()),
@@ -514,20 +716,3 @@ class AutomataGraphView(QGraphicsView):
     #     )
     #     self.blockSignals(False)
     #     return super().resizeEvent(event)
-
-    def to_automata(self) -> Automata:
-        inputs, outputs = [], []
-        for edge in self.edges:
-            inputs.append(edge.input_value)
-            outputs.append(edge.output_value)
-
-        automata = Automata(
-            list(self.nodes.keys()), self.initial_state, inputs, outputs
-        )
-        for name, node in self.nodes.items():
-            for dest_name, edge in node.out_edges.items():
-                for in_ in edge.inputs():
-                    for out_ in edge.output(in_):
-                        automata.add_transition(in_, name, dest_name, out_)
-
-        return automata

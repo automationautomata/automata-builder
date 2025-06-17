@@ -3,6 +3,8 @@ from os.path import dirname, join
 
 import yaml
 
+from data import LOCALE_DIR
+
 
 def load_locales(path):
     """
@@ -33,6 +35,6 @@ def load_locales(path):
 
 current_lang = ""
 
-locale = load_locales(join(dirname(__file__), "locale"))
+locale = load_locales(LOCALE_DIR)
 
 getstr = lambda name: locale[current_lang][name]  # noqa: E731

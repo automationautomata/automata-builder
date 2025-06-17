@@ -6,7 +6,8 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QTabWidget,
     QVBoxLayout,
-    QWidget,QWhatsThis
+    QWidget,
+    QWhatsThis,
 )
 
 import lang
@@ -73,7 +74,7 @@ if __name__ == "__main__":
     window = MainWindow()
 
     stylesheet = utiles.load_stylesheets()
-    
+
     window.setStyleSheet(stylesheet)
     window.show()
     QWhatsThis.enterWhatsThisMode()

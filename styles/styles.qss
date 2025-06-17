@@ -432,12 +432,3 @@ QRadioButton::indicator:hover {
     border: 1px solid #c0c0c0;
 }
 
-/*QGraphicsView*/
-QGraphicsView {
-    background-color: white; /* Общий белый фон */
-    border: 0.5px solid #363232; /* Убираем рамку */
-}
-
-QGraphicsView::viewport {
-    background: white; /* Белый фон для области просмотра */
-}
