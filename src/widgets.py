@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from lang import getstr
+from lang import getlocale
 
 
 class MultipleInputDialog(QDialog):
@@ -32,8 +32,8 @@ class MultipleInputDialog(QDialog):
         layout = QVBoxLayout()
 
         button_layout = QHBoxLayout()
-        ok_button = QPushButton(getstr("accept"), self)
-        cancel_button = QPushButton(getstr("cancel"), self)
+        ok_button = QPushButton(getlocale("accept"), self)
+        cancel_button = QPushButton(getlocale("cancel"), self)
 
         ok_button.clicked.connect(self.accept)
         cancel_button.clicked.connect(self.reject)
@@ -219,7 +219,9 @@ class PlotWidget(QWidget):
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 
-    def draw(self, x: list[int], y: list[int], title: str = "Embedded Matplotlib Plot"):
+    def draw(
+        self, x: list[int], y: list[int], title: str = "Embedded Matplotlib Plot"
+    ) -> None:
         ax = self.figure.add_subplot(1, 1, 1)
         ax.plot(x, y)
         ax.set_title(title)

@@ -1,9 +1,9 @@
 import os
-from os.path import dirname, join
+from os.path import join
 
 import yaml
 
-from data import LOCALE_DIR
+from data import BASE_LANG, LOCALE_DIR
 
 
 def load_locales(path):
@@ -12,9 +12,7 @@ def load_locales(path):
     If no YAML files are found, returns an empty dictionary.
     """
     # Find all YAML files in the directory
-    yaml_files = [
-        f for f in os.listdir(path) if f.endswith((".yml", ".yaml"))
-    ]
+    yaml_files = [f for f in os.listdir(path) if f.endswith((".yml", ".yaml"))]
 
     # If no YAML files are found, return an empty dictionary
     if not yaml_files:
@@ -33,8 +31,9 @@ def load_locales(path):
     return merged_data
 
 
-current_lang = ""
-
 locale = load_locales(LOCALE_DIR)
 
-getstr = lambda name: locale[current_lang][name]  # noqa: E731
+current_lang = BASE_LANG
+
+def getlocale(name):
+    return locale[current_lang][name]

@@ -1,6 +1,9 @@
-from typing import Sequence
+import copy
+from itertools import permutations
+from typing import Any, Generator, Sequence
 
-Table = dict[str, dict[str]]
+Table = dict[str, dict[str]]  # State: { Symbol: State }
+
 
 class Automata:
     def __init__(
@@ -13,22 +16,26 @@ class Automata:
         if initial_state and states and initial_state not in states:
             raise ValueError("Initial state must be in given states")
 
-        self.states = set(states) if states else None
+        self.states = set(states) if states else set()
         self.initial_state_ = initial_state
 
         self.input_alphabet_ = {}
         if input_alphabet:
-            self.input_alphabet_.update({smb: i for i, smb in enumerate(input_alphabet, 1)})
-            
+            self.input_alphabet_.update(
+                {smb: i for i, smb in enumerate(input_alphabet, 1)}
+            )
+
         self.output_alphabet_ = {}
         if output_alphabet:
-            self.output_alphabet_.update({smb: i for i, smb in enumerate(output_alphabet, 1)})
+            self.output_alphabet_.update(
+                {smb: i for i, smb in enumerate(output_alphabet, 1)}
+            )
 
         self.transitions_ = {
-            smb: dict.fromkeys(states, '') for smb in self.input_alphabet_
+            s: dict.fromkeys(self.input_alphabet_, "") for s in self.states
         }
         self.output_function_ = {
-            smb: dict.fromkeys(states, '') for smb in self.input_alphabet_
+            s: dict.fromkeys(self.input_alphabet_, "") for s in self.states
         }
 
     @property
@@ -50,23 +57,9 @@ class Automata:
     def output_alphabet(self) -> list[str]:
         return list(self.output_alphabet_.keys())
 
-    def reset_input_order(self, ordered: list[str]) -> None:
-        if len(ordered) != len(self.input_alphabet_):
-            raise ValueError()
-        if len(set(ordered) ^ set(self.input_alphabet_)) != 0:
-            raise ValueError()
-        self.input_alphabet_ = {symb: i for i, symb in enumerate(ordered, 1)}
-
-    def reset_output_order(self, ordered: list[str]) -> None:
-        if len(ordered) != len(self.output_alphabet_):
-            raise ValueError()
-        if len(set(ordered) ^ set(self.output_alphabet_)) != 0:
-            raise ValueError()
-        self.output_alphabet_ = {symb: i for i, symb in enumerate(ordered, 1)}
-
     @property
     def transitions(self) -> Table:
-        return self.transitions_
+        return copy.deepcopy(self.transitions_)
 
     @transitions.setter
     def transitions(self, transitions: Table) -> None:
@@ -80,7 +73,7 @@ class Automata:
 
     @property
     def output_function(self) -> Table:
-        return self.output_function_
+        return copy.deepcopy(self.output_function_)
 
     @output_function.setter
     def output_function(self, output_function: Table) -> None:
@@ -92,15 +85,34 @@ class Automata:
             if len(diff) != 0:
                 raise ValueError()
 
+    def reset_input_order(self, ordered: list[str]) -> None:
+        if len(ordered) != len(self.input_alphabet_):
+            raise ValueError()
+        if len(set(ordered) ^ set(self.input_alphabet_)) != 0:
+            raise ValueError()
+        self.input_alphabet_ = {symb: i for i, symb in enumerate(ordered, 1)}
+
+    def reset_output_order(self, ordered: list[str]) -> None:
+        if len(ordered) != len(self.output_alphabet_):
+            raise ValueError()
+        if set(ordered) != set(self.output_alphabet_):
+            raise ValueError()
+        self.output_alphabet_ = {symb: i for i, symb in enumerate(ordered, 1)}
+
     def add_state(self, state: str) -> None:
         self.states.add(state)
+        self.transitions_.update({state: dict.fromkeys(self.input_alphabet_, "")})
+        self.output_function_.update({state: dict.fromkeys(self.input_alphabet_, "")})
 
-    def add_input_symbol(self, symbol: str) -> None:
+    def add_input(self, symbol: str) -> None:
         self.input_alphabet_[symbol] = self.input_alphabet_.get(
             symbol, len(self.input_alphabet_) + 1
         )
+        for state in self.transitions_.keys():
+            self.transitions_[state][symbol] = ""
+            self.output_function_[state][symbol] = ""
 
-    def add_output_symbol(self, symbol: str) -> None:
+    def add_output(self, symbol: str) -> None:
         self.output_alphabet_[symbol] = self.output_alphabet_.get(
             symbol, len(self.output_alphabet_) + 1
         )
@@ -117,22 +129,16 @@ class Automata:
         if output_symbol not in self.output_alphabet_:
             raise ValueError("Output symbol must be in output alphabet")
 
-        self.transitions_[input_symbol][input_state] = output_state
-        self.output_function_[input_symbol][input_state] = output_symbol
+        self.transitions_[input_state][input_symbol] = output_state
+        self.output_function_[input_state][input_symbol] = output_symbol
 
     def transition(self, symbol: str, state: str) -> tuple[str, str]:
-        s = self.transitions_[symbol][state]
-        o = self.output_function_[symbol][state]
+        s = self.transitions_[state][symbol]
+        o = self.output_function_[state][symbol]
         return s, o
 
-    def read(self, word: str) -> str:
-        if len(set(word) ^ self.input_alphabet_.keys()) == 0:
-            raise ValueError(
-                "The input word contains symbols not from the input alphabet"
-            )
-        if not self.initial_state:
-            raise ValueError("Initial state must be setted")
-
+    def __read__(self, word: str) -> str:
+        """Unsafe read"""
         output = ""
         s = self.initial_state
         for w in word:
@@ -140,16 +146,32 @@ class Automata:
             output += f"{output}{o}"
         return output
 
+    def read(self, word: str) -> str:
+        """Safe read with input word check"""
+        if set(self.input_alphabet_.keys()).issubset(word):
+            raise ValueError(
+                "The input word contains symbols not from the input alphabet"
+            )
+        if not self.initial_state:
+            raise ValueError("Initial state must be setted")
+
+        return self.__read__(word)
+
     def to_number(self, word: str) -> tuple[float, float]:
-        out = self.read(word)
+        n = len(self.input_alphabet_)
+        number = sum(
+            self.input_alphabet_[word[i]] / n**i for i in range(1, len(word) + 1)
+        )
+        return number
 
-        n = self.input_alphabet_
-        in_ = sum(self.input_alphabet_[word[i]] / n**i for i in range(1, len(word) + 1))
+    def input_words(self, length: int) -> Generator[str, Any, None]:
+        for seq in permutations(self.input_alphabet_, length):
+            yield "".join(seq)
 
-        m = self.input_alphabet_
-        out_ = sum(self.output_alphabet_[out[i]] / m**i for i in range(1, len(out) + 1))
-
-        return in_, out_
+    def pairs_generator(self, length: int) -> Generator[tuple[str, str], Any, None]:
+        for in_word in self.input_words(length):
+            out_word = self.__read__(in_word)
+            yield in_word, out_word
 
     def detailed_verificatin(self) -> list[str]:
         errors = []

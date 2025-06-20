@@ -40,3 +40,18 @@ SidePanel QScrollArea QLabel {
 SidePanel VerticalMessagesWidget QLabel:hover {
     background-color: #4cf91505;
 }
+
+AutomataContainer QPushButton {
+    background-color: #ffffff;
+    padding: 2px 5px 2px 5px;
+    font-size: 8pt;
+    margin: 0px;
+}
+
+AutomataWordInput QPushButton {
+    background-color: #e0e0e0;
+    color: #232629;
+    border: 1px solid #d0d0d0;
+    padding: 5px 10px;
+    border-radius: 3px;
+}
