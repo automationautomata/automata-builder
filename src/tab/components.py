@@ -231,12 +231,12 @@ class SidePanel(QWidget):
         if self.current_mode != self.Mode.ERROR_MESSAGES:
             raise Exception("Error messages widget doesn't set")
 
-        group = QSequentialAnimationGroup(self.error_messages.container)
+        group = QSequentialAnimationGroup(self.error_messages)
 
         pause = 120
         for msg in messages:
             self.error_messages.add_message(msg)
-            last = self.error_messages.count - 1
+            last = self.error_messages.count() - 1
             label = self.error_messages.get_message(last)
 
             opacity_effect = QGraphicsOpacityEffect(label)
@@ -244,7 +244,7 @@ class SidePanel(QWidget):
             label.setGraphicsEffect(opacity_effect)
 
             animation = QPropertyAnimation(
-                opacity_effect, b"opacity", self.error_messages.container
+                opacity_effect, b"opacity", self.error_messages
             )
             animation.setDuration(400)
             animation.setStartValue(0)
@@ -345,7 +345,12 @@ class AutomataWordInput(QWidget):
 
 
 class AutomataContainer(QWidget):
-    def __init__(self, parent: QWidget | None = None, buttons_size: int = 55) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        button_size: int = 55,
+        tact_counter_size: int = 100,
+    ) -> None:
         super().__init__(parent)
         self.view = AutomataGraphView()
         self.view.fitInView(
@@ -356,50 +361,60 @@ class AutomataContainer(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
 
-        self.word_handler = AutomataWordInput()
-        self.word_handler.setMinimumHeight(self.height() // 6)
-        self.word_handler.setMaximumWidth(self.width())
-        self.word_handler.setSizePolicy(
+        self.word_input = AutomataWordInput()
+        self.word_input.setMinimumHeight(self.height() // 6)
+        self.word_input.setMaximumWidth(self.width())
+        self.word_input.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self.word_handler.input_word_edit.textChanged.connect(self.filter_input)
-        self.word_handler.forward_button.clicked.connect(self.forward_click)
-        self.word_handler.backword_button.clicked.connect(self.backward_click)
+        self.word_input.input_word_edit.textChanged.connect(self.filter_input)
+        self.word_input.forward_button.clicked.connect(self.forward_click)
+        self.word_input.backword_button.clicked.connect(self.backward_click)
 
         automata_layout = QVBoxLayout(self)
         automata_layout.addWidget(self.view)
-        automata_layout.addWidget(self.word_handler, 0, Qt.AlignmentFlag.AlignTop)
+        automata_layout.addWidget(self.word_input, 0, Qt.AlignmentFlag.AlignTop)
 
-        self.buttons_container = QWidget(self)
-        self.buttons_container.setFixedSize(2 * buttons_size, buttons_size)
-        self.buttons_container.setContentsMargins(7, 7, 0, 0)
+        # --------------------------------------
+        # self.overlay_container = QWidget(self.view)
+        # self.overlay_container.setFixedSize(self.view.size())
 
-        self.save_button = QPushButton("Save")
-        self.save_button.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.save_button.clicked.connect(self.save_view)
+        # # self.overlay_container.setContentsMargins(6, 7, 0, 0)
+        # self.overlay_container.setAttribute(
+        #     Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
+        # )
+        # self.overlay_container.setAttribute(
+        #     Qt.WidgetAttribute.WA_NoSystemBackground, True
+        # )
+        # self.overlay_container.setAttribute(
+        #     Qt.WidgetAttribute.WA_TranslucentBackground, True
+        # )
 
-        self.load_button = QPushButton("Load")
-        self.load_button.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.load_button.clicked.connect(self.load_view)
+        # self.save_button = QPushButton("Save")
+        # self.save_button.setFixedSize(button_size, button_size//2)
+        # self.save_button.clicked.connect(self.save_view)
 
-        buttons_layout = QHBoxLayout(self.buttons_container)
-        buttons_layout.addWidget(self.load_button)
-        buttons_layout.addWidget(self.save_button)
-        self.buttons_container.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
-        )
-        self.buttons_container.setAttribute(
-            Qt.WidgetAttribute.WA_NoSystemBackground, True
-        )
-        self.buttons_container.setAttribute(
-            Qt.WidgetAttribute.WA_TranslucentBackground, True
-        )
+        # self.load_button = QPushButton("Load")
+        # self.load_button.setFixedSize(button_size, button_size//2)
+        # self.load_button.clicked.connect(self.load_view)
 
-        self.prev_input_word = self.word_handler.input_word
+        # buttons_layout = QHBoxLayout()
+        # buttons_layout.addWidget(self.load_button)
+        # buttons_layout.addWidget(self.save_button)
+
+        # self.tact_counter = QLabel('145235')
+        # self.tact_counter.setContentsMargins(0, 0, 0, 0)
+        # self.tact_counter.setFixedSize(tact_counter_size, tact_counter_size)
+
+        # # --------------------------------------
+        # overlay_layout = QVBoxLayout(self.overlay_container)
+        # overlay_layout.addLayout(buttons_layout)
+        # buttons_layout.addStretch(2)
+        # overlay_layout.addWidget(self.tact_counter, 2, Qt.AlignmentFlag.AlignBottom)
+        # self.overlay_container.setLayout(overlay_layout)
+
+        # --------------------------------------
+        self.prev_input_word = self.word_input.input_word
         self.transitions_history = []
         self.automata_check = None
 
@@ -410,26 +425,26 @@ class AutomataContainer(QWidget):
         return self.view.to_automata()
 
     def filter_input(self) -> None:
-        word = self.word_handler.input_word
+        word = self.word_input.input_word
         input_alphabet = self.automata().input_alphabet
         if all(s in input_alphabet for s in word):
             self.prev_input_word = word
             return
-        self.word_handler.blockSignals(True)
-        self.word_handler.input_word = self.prev_input_word
-        self.word_handler.blockSignals(False)
+        self.word_input.blockSignals(True)
+        self.word_input.input_word = self.prev_input_word
+        self.word_input.blockSignals(False)
         QMessageBox.warning(self, "Error", "Invalid input symbol")
 
     def forward_click(self) -> None:
-        if not (self.word_handler.input_word and self.automata_check):
+        if not (self.word_input.input_word and self.automata_check):
             return
 
         automata = self.automata()
         if not self.automata_check(automata):
             return
 
-        n = len(self.word_handler.output_word)
-        if n == len(self.word_handler.input_word):
+        n = len(self.word_input.output_word)
+        if n == len(self.word_input.input_word):
             return
 
         if n == 0:
@@ -437,23 +452,23 @@ class AutomataContainer(QWidget):
             self.transitions_history.append(automata.initial_state)
 
         cur_state = self.transitions_history[-1]
-        cur_symb = self.word_handler.input_word[n]
+        cur_symb = self.word_input.input_word[n]
         state, out_ = automata.transition(cur_symb, cur_state)
 
-        self.word_handler.append_to_output(out_)
+        self.word_input.append_to_output(out_)
         self.view.mark_node(state, QColor(128, 0, 0))
         self.transitions_history.append(state)
 
     def backward_click(self) -> None:
-        if not (self.word_handler.input_word and self.automata_check):
+        if not (self.word_input.input_word and self.automata_check):
             return
 
         if len(self.transitions_history) == 0:
             return
 
         # Reduce on 1 symbol output word
-        output_word = self.word_handler.output_word
-        self.word_handler.output_word = output_word[:-1]
+        output_word = self.word_input.output_word
+        self.word_input.output_word = output_word[:-1]
 
         # Mark previous state
         state = self.transitions_history.pop()

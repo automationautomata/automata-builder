@@ -5,6 +5,7 @@ from typing import Any
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import (
     QBrush,
+    QVector2D,
     QFont,
     QPainterPath,
     QPainterPathStroker,
@@ -31,7 +32,7 @@ class Node(QGraphicsEllipseItem):
         self, name: str, x: int | float, y: int | float, radius: int | float = 20
     ) -> None:
         super().__init__(-radius, -radius, 2 * radius, 2 * radius)
-        self.name = name
+        self.name_ = name
         self.in_edges: dict[str, Edge] = {}  # ребра, входящие в узел
         self.out_edges: dict[str, Edge] = {}  # ребра, исходящие из узла
 
@@ -44,8 +45,12 @@ class Node(QGraphicsEllipseItem):
         )
         self.setPos(x, y)
 
-        self.name_text_item = QGraphicsTextItem(self.name, self)
+        self.name_text_item = EditableTextItem(self.name_, self)
         self.name_text_item.setFont(QFont("Arial", 11))
+        self.name_text_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.name_text_item.setFlag(
+            QGraphicsTextItem.GraphicsItemFlag.ItemIsFocusable, False
+        )
 
         doc = self.name_text_item.document()
         doc.setDocumentMargin(0)  # Убирает отступы вокруг текста
@@ -56,8 +61,24 @@ class Node(QGraphicsEllipseItem):
             center.x() - text_rect.width() / 2, center.y() - text_rect.height() / 2
         )
 
+    @property
+    def name(self) -> str:
+        return self.name_
+
+    @name.setter
+    def name(self, value: str) -> None:
+        self.name_ = value
+        self.name_text_item.setPlainText(value)
+
+    def enable_name_edit(self) -> None:
+        self.name_text_item.enable_edit()
+
+    def disable_name_edit(self) -> None:
+        self.name_ = self.name_text_item.toPlainText()
+        self.name_text_item.disable_edit()
+
     def has_loop(self) -> bool:
-        return self.name in self.in_edges
+        return self.name_ in self.in_edges
 
     def itemChange(self, change, value) -> Any:
         if change == self.GraphicsItemChange.ItemPositionHasChanged:
@@ -69,7 +90,7 @@ class Node(QGraphicsEllipseItem):
 
     def serialize(self) -> dict[str, Any]:
         return {
-            "name": self.name,
+            "name": self.name_,
             "x": self.pos().x(),
             "y": self.pos().y(),
             "radius": self.rect().width() / 2,
@@ -78,38 +99,53 @@ class Node(QGraphicsEllipseItem):
     @staticmethod
     def deserialize(data: dict) -> "Node":
         node = Node(
-            name=data["name"], x=data["x"], y=data["y"], radius=data.get("radius", 20)
+            name=data["name"],
+            x=data["x"],
+            y=data["y"],
+            radius=data.get("radius", 20),
         )
         return node
 
 
 class Edge(QGraphicsPathItem):
+    TEXT_COLOR = Qt.GlobalColor.red
+    BASIC_COLOR = Qt.GlobalColor.black
+    SELECTED_COLOR = Qt.GlobalColor.red
+
     def __init__(
-        self, input_value: str, output_value: str, source: Node, destination: Node
+        self,
+        input_value: str,
+        output_value: str,
+        source: Node,
+        destination: Node,
+        click_area_size: int = 10,
     ) -> None:
         super().__init__()
-        self.transitions = {input_value: [output_value]}
+        # each input could have only one output
+        self.transitions = {output_value: [input_value]}
 
         self.source = source
         self.destination = destination
         self.is_reversed = self.destination.name in self.source.in_edges
         self.text_font = QFont("Arial", 14)
-        self.setPen(QPen(Qt.GlobalColor.black, 2))
+        self.setPen(QPen(self.BASIC_COLOR, 2))
         self.setFlag(
             QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
             | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
         )
         self.arrow_size = 10
         self.arrow_head = None
-        self.text_item: EditableTextItem = None
-
-        self.create_click_area(30)
+        self.text_item: QGraphicsTextItem = None
+        self.dragging_control_point = False
+        self.bend_ratio = 0.5  # значение от 0 до 1, где 0 — у source, 1 — у destination
+        self.bend_offset = 5.0
+        self.click_area_size = click_area_size
 
     @property
     def edge_text(self) -> str:
         return ", ".join(
-            f"{input_} | {','.join(outputs)}"
-            for input_, outputs in self.transitions.items()
+            f"{','.join(inputs)} | {output}"
+            for output, inputs in self.transitions.items()
         )
 
     def inputs(self) -> set[str]:
@@ -125,10 +161,10 @@ class Edge(QGraphicsPathItem):
             return False
         return output_value in self.transitions[input_value]
 
-    def add_transition(self, input_value: str, output_value: str) -> None:
-        if input_value not in self.transitions:
-            self.transitions[input_value] = []
-        elif output_value in self.transitions[input_value]:
+    def add_transition(self, output_value: str, input_value: str) -> None:
+        if output_value not in self.transitions:
+            self.transitions[output_value] = []
+        elif input_value in self.transitions[output_value]:
             return
 
         self.transitions[input_value].append(output_value)
@@ -142,6 +178,7 @@ class Edge(QGraphicsPathItem):
         self.text_font.setPointSizeF(font_size - 0.12)
         self.text_item.setFont(self.text_font)
         self.text_item.setPlainText(self.edge_text)
+        self.is_reversed = self.destination.name in self.source.in_edges
 
     def remove_transition(self, input_value: str, output_value: str) -> None:
         if input_value not in self.transitions:
@@ -152,46 +189,114 @@ class Edge(QGraphicsPathItem):
         self.transitions[input_value].remove(output_value)
         if len(self.transitions[input_value]) == 0:
             del self.transitions[input_value]
+        self.is_reversed = self.destination.name in self.source.in_edges
 
-    def create_click_area(self, width: int) -> None:
-        # Создаем новую область с шириной 'width' вокруг исходного пути
+    def shape(self) -> QPainterPath:
+        original_path = super().shape()
         stroker = QPainterPathStroker()
-        stroker.setWidth(width)
-        self.click_area = stroker.createStroke(self.path())
+        # ширина с обеих сторон
+        stroker.setWidth(self.click_area_size * 2)
+        expanded_path = stroker.createStroke(original_path)
+        # Создаем новую область с шириной 'width' вокруг исходного пути
+        return expanded_path
+
+    def itemChange(self, change, value):
+        if change == self.GraphicsItemChange.ItemSelectedHasChanged:
+            pen_width = self.pen().width()
+            if value:
+                pen = QPen(self.SELECTED_COLOR, pen_width)
+            else:
+                pen = QPen(self.BASIC_COLOR, pen_width)
+            self.setPen(pen)
+        return super().itemChange(change, value)
+
+    def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent | None) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.dragging_control_point = True
+        return super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent | None):
+        if self.dragging_control_point:
+            # Обновляем bend_ratio в зависимости от положения мыши относительно линии
+            source_point = self.get_boundary_point(self.source, self.destination)
+            dest_point = self.get_boundary_point(self.destination, self.source)
+
+            line_vec = dest_point - source_point
+            total_length = math.hypot(line_vec.x(), line_vec.y())
+
+            if total_length == 0:
+                return
+
+            click_pos = event.scenePos()
+
+            # Проекция точки на линию для определения ratio
+            vec_to_click = click_pos - source_point
+            ratio_along_line = (
+                vec_to_click.x() * line_vec.x() + vec_to_click.y() * line_vec.y()
+            ) / (total_length**2)
+
+            # Ограничиваем ratio между 0 и 1
+            ratio_along_line_clamped = 1.0 - max(0.0, min(1.0, ratio_along_line))
+            self.bend_ratio = ratio_along_line_clamped
+
+            # Расчет нового bend_offset как расстояния от точки до линии вдоль перпендикуляра
+            mid_point_new = source_point + line_vec * self.bend_ratio
+            perp_vector = QPointF(-line_vec.y(), line_vec.x()) / total_length
+
+            # Проекция точки на линию для определения offset
+            vec_to_click_new = click_pos - mid_point_new
+            bend_offset_new = (
+                QVector2D(vec_to_click_new).toPointF().x() * perp_vector.x()
+                + QVector2D(vec_to_click_new).toPointF().y() * perp_vector.y()
+            )
+
+            # Можно ограничить или оставить без ограничений
+            self.bend_offset = bend_offset_new
+            # Обновляем путь с новым изгибом
+            self.update_path()
+
+        return super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent | None):
+        self.dragging_control_point = False
+        return super().mouseReleaseEvent(event)
 
     def update_path(self) -> None:
         path = QPainterPath()
+        source_point = self.get_boundary_point(self.source, self.destination)
+        dest_point = self.get_boundary_point(self.destination, self.source)
 
-        if self.source is self.destination:
-            rect = self.source.rect()
-            top_center = self.source.mapToScene(QPointF(rect.center().x(), rect.top()))
-            path.moveTo(top_center)
+        control_point = self.get_control_point(
+            source_point, dest_point, self.bend_ratio, self.bend_offset
+        )
 
-            x_offset, y_offset = 40, 50
-            ctrlPt1 = QPointF(top_center.x() - x_offset, top_center.y() - y_offset)
-            ctrlPt2 = QPointF(top_center.x() + x_offset, top_center.y() - y_offset)
-
-            path.cubicTo(ctrlPt2, ctrlPt1, top_center)
-        else:
-            # Получаем позиции узлов
-            source_point = self.get_boundary_point(self.source, self.destination)
-            dest_point = self.get_boundary_point(self.destination, self.source)
-            path.moveTo(source_point)
-            # Создаем кривую с помощью quadTo (квадратичная кривая)
-            # Можно выбрать контрольную точку для изгиба
-            control_point = (source_point + dest_point) / 2
-
-            if self.is_reversed:
-                # смещение вниз
-                control_point.setY(control_point.y() + 80)
-            else:
-                # смещение вверх
-                control_point.setY(control_point.y() - 80)
-            path.quadTo(control_point, dest_point)
-
+        path.moveTo(source_point)
+        path.quadTo(control_point, dest_point)
         self.setPath(path)
         self.draw_arrowhead()
         self.create_edge_text()
+
+    @staticmethod
+    def get_control_point(
+        dest_point: QPointF,
+        source_point: QPointF,
+        bend_ratio: float,
+        bend_offset: float,
+    ) -> QPointF:
+        line_vec = dest_point - source_point
+        length = math.hypot(line_vec.x(), line_vec.y())
+
+        if length == 0:
+            return source_point
+
+        # Точка на линии по bend_ratio
+        bend_point = source_point + line_vec * bend_ratio
+
+        # Перпендикуляр к линии
+        perp = QPointF(line_vec.y(), -line_vec.x()) / length
+
+        # Смещение по перпендикуляру на bend_offset
+        return bend_point + perp * bend_offset
 
     @staticmethod
     def get_boundary_point(source: Node, destination: Node) -> QPointF:
@@ -233,9 +338,10 @@ class Edge(QGraphicsPathItem):
         # Текстовый элемент для входа
         text_item = EditableTextItem(self.edge_text, self)
         text_item.setFlag(
-            QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
-            | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
+            QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
         )
+        text_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, False)
+        text_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsFocusable, False)
         text_item.setDefaultTextColor(Qt.GlobalColor.red)
         text_item.setFont(self.text_font)
         text_item.setPos(mid_point + offset)
@@ -251,6 +357,7 @@ class Edge(QGraphicsPathItem):
             scene = self.scene()
             if scene:
                 scene.removeItem(self.arrow_head)
+            del self.arrow_head
 
         path_length = self.path().length()
 
@@ -306,10 +413,6 @@ class Edge(QGraphicsPathItem):
 
         # Save reference to remove later if needed
         self.arrow_head = arrow_item
-
-    def mousePressEvent(self, event: QGraphicsSceneMouseEvent) -> None:
-        if event.button() == Qt.MouseButton.RightButton:
-            pass
 
     def serialize(self) -> dict[str, Any]:
         return {

@@ -1,8 +1,8 @@
-from typing import Callable
-
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QKeyEvent
+
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -12,9 +12,11 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QScrollArea,
+    QListWidgetItem,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
+    QListWidget,
 )
 
 from lang import getlocale
@@ -128,7 +130,7 @@ class TableInputDialog(MultipleInputDialog):
 
 
 class EditableTextItem(QGraphicsTextItem):
-    def __init__(self, text, parent, handler: Callable[[str], None] = None):
+    def __init__(self, text: str = '', parent: QWidget | None = None):
         super().__init__(text, parent)
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
@@ -136,77 +138,67 @@ class EditableTextItem(QGraphicsTextItem):
             # QGraphicsTextItem.GraphicsItemFlag.ItemIsSelectable |
             QGraphicsTextItem.GraphicsItemFlag.ItemIsFocusable
         )
+    
+    def keyPressEvent(self, event: QKeyEvent | None) -> None:
+        if event.key() == Qt.Key.Key_Enter:
+            self.disable_edit()
+        return super().keyPressEvent(event)
+    
+    def enable_edit(self) -> None:
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
+        self.setFocus()
+
+    def disable_edit(self) -> None:
+        self.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        self.clearFocus()
 
 
-class VerticalMessagesWidget(QWidget):
-    def __init__(self, parent: QWidget | None = None):
+class VerticalMessagesWidget(QListWidget):
+    def __init__(self, parent: QWidget | None = None, spacing: int = 2) -> None:
         super().__init__(parent)
-        self.main_layout = QVBoxLayout(self)
-
-        # Создаём область с прокруткой
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-
-        # Внутренний контейнер для сообщений
-        self.messages_container = QWidget()
-
-        self.messages_layout = QVBoxLayout()
-        self.messages_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.messages_layout.setDirection(QVBoxLayout.Direction.Down)
-        self.messages_container.setLayout(self.messages_layout)
-
-        self.scroll_area.setWidget(self.messages_container)
-
-        # Добавляем область прокрутки в основной макет
-        self.main_layout.addWidget(self.scroll_area)
-
-        # Храним список сообщений для обновления ширины при ресайзе
-        self.labels: list[QLabel] = []
-
-    @property
-    def count(self) -> int:
-        return len(self.labels)
-
-    @property
-    def scrollbar(self) -> int:
-        return self.scroll_area.verticalScrollBar()
-
-    @property
-    def container(self) -> QWidget:
-        return self.messages_container
+        self.setSpacing(spacing)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setSelectionMode(QListWidget.SelectionMode.NoSelection)
 
     def add_message(self, text: str) -> None:
+        item = QListWidgetItem(self)
         label = QLabel(text)
-        label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        label.setContentsMargins(0, 0, 0, 0)
+        label.setMaximumWidth(self.width())
+        # label.setSizePolicy(
+        #     QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        # )
+
         label.setWordWrap(True)
-
-        self.messages_layout.addWidget(label)
-        self.labels.append(label)
-
-        scrollbar = self.scroll_area.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        self.addItem(item)
+        self.setItemWidget(item, label)
+        item.setSizeHint(label.sizeHint())
 
     def get_message(self, message_pos: int) -> QLabel:
-        return self.labels[message_pos]
+        return self.itemWidget(self.item(message_pos))
 
     def remove_message(self, message_pos: int) -> None:
-        if message_pos > len(self.labels):
+        if message_pos > self.count():
             raise ValueError(
                 "The message position must be less than the number of messages"
             )
-        label = self.labels[message_pos]
-        self.layout().removeWidget(label)
-        self.labels.pop(message_pos)
-        label.deleteLater()
+        message_item = self.item(message_pos)
+        if not message_item:
+            return
+        message = self.itemWidget(message_item)
+        if not message:
+            return
+        self.removeItemWidget(message_item)
+        message.deleteLater()
+
+        row = self.row(message_item)
+        taken_item = self.takeItem(row)
+        del taken_item
 
     def clear(self) -> None:
-        while len(self.labels) > 0:
-            label = self.labels.pop()
-            self.layout().removeWidget(label)
-            label.deleteLater()
+        while self.count() > 0:
+            self.remove_message(self.count() - 1)
 
 
 class PlotWidget(QWidget):

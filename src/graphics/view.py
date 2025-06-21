@@ -187,6 +187,10 @@ class AutomataGraphView(QGraphicsView):
             while len(selected_nodes) > 0:
                 self.delete_node(selected_nodes.pop())
 
+            selected_edges = [item for item in selected if isinstance(item, Edge)]
+            while len(selected_edges) > 0:
+                self.delete_edge(selected_edges.pop())
+
         return super().keyPressEvent(event)
 
     def context_menu(self, point: QPoint) -> None:
@@ -210,19 +214,19 @@ class AutomataGraphView(QGraphicsView):
 
     def node_actions(self, node: Node) -> list[QAction]:
         def edit_node():
-            old_name = node.name
-            node.name_text_item.setTextInteractionFlags(
-                Qt.TextInteractionFlag.TextEditorInteraction
-            )
-            node.name_text_item.setFocus()
+            dialog = VerticalInputDialog("New name:")
+            values = dialog.get_values()
+            if not values:
+                return
 
-            new_name = node.name_text_item.toPlainText()
-            if new_name != old_name and new_name in self.nodes:
+            new_name = values[0]
+            if new_name != node.name and new_name in self.nodes:
                 QMessageBox.warning(
                     self, "Ошибка", "Узел с таким названием уже существует"
                 )
                 return
-            self.nodes.pop(old_name)
+            self.nodes.pop(node.name)
+            node.name = new_name
             self.nodes[new_name] = node
 
         selected = self.scene().selectedItems()
@@ -259,13 +263,6 @@ class AutomataGraphView(QGraphicsView):
         return actions
 
     def edge_actions(self, edge: Edge) -> list[QAction]:
-        def delete_edge():
-            nonlocal edge
-            edge.source.out_edges.pop(edge.destination.name)
-            edge.destination.in_edges.pop(edge.source.name)
-            self.scene().removeItem(edge)
-            del edge
-
         def edit_edge():
             dialog = EdgeEditDialog(edge, "Редактирование")
             values = dialog.get_values()
@@ -278,7 +275,7 @@ class AutomataGraphView(QGraphicsView):
 
             edge.transitions = {}
             for in_, out_ in values:
-                edge.add_transition(in_, out_)
+                edge.add_transition(out_, in_)
 
         def new_transition():
             values = self.enter_edge()
@@ -291,7 +288,7 @@ class AutomataGraphView(QGraphicsView):
         edit_action = QAction("Редактировать", self)
         add_action = QAction("Добавить", self)
 
-        delete_action.triggered.connect(delete_edge)
+        delete_action.triggered.connect(lambda: self.delete_edge(edge))
         edit_action.triggered.connect(edit_edge)
         add_action.triggered.connect(new_transition)
 
@@ -314,29 +311,41 @@ class AutomataGraphView(QGraphicsView):
         edge.update_path()
 
     def delete_node(self, node: Node) -> None:
-        for in_node in list(node.in_edges.keys()):
-            # Удаляем текущий узел (принимающий)
-            # из ребер узла, из которого оно исходит
-            edge = node.in_edges[in_node]
-            edge.source.out_edges.pop(in_node)
+        if node.has_loop():
+            edge = node.in_edges.pop(node.name)
+            node.out_edges.pop(node.name)
+            self.scene().removeItem(edge)
+            del edge
+
+        for src_node in list(node.in_edges.keys()):
+            # Удаляем текущий узел (приемник)
+            # из списка ребер узла, из которого оно исходит
+            edge = node.in_edges.pop(src_node)
+            edge.source.out_edges.pop(node.name)
 
             # Удаляем само реберо
-            node.in_edges.pop(in_node)
             self.scene().removeItem(edge)
+            del edge
 
-        for out_node in list(node.out_edges.keys()):
+        for dst_node in list(node.out_edges.keys()):
             # Удаляем текущий узел (источник)
-            # из ребер узла, в которое ребро входит
-            edge = node.out_edges[out_node]
-            edge.destination.in_edges.pop(out_node)
+            # из списка ребер узла, в которое ребро входит
+            edge = node.out_edges.pop(dst_node)
+            edge.destination.in_edges.pop(node.name)
 
-            node.out_edges.pop(out_node)
             self.scene().removeItem(edge)
+            del edge
 
         # Удаляем узел реберо
         self.nodes.pop(node.name)
         self.scene().removeItem(node)
         del node
+
+    def delete_edge(self, edge: Edge):
+        edge.source.out_edges.pop(edge.destination.name)
+        edge.destination.in_edges.pop(edge.source.name)
+        self.scene().removeItem(edge)
+        del edge
 
     def set_initial_node(self, node: Node) -> Node:
         color = QColor(128, 25, 90, 180)  # Standard purple color

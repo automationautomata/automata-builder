@@ -1,4 +1,3 @@
-import json
 from typing import Callable
 
 from PyQt6.QtCore import (
@@ -6,187 +5,18 @@ from PyQt6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     QRect,
-    QRectF,
     QSequentialAnimationGroup,
     Qt,
 )
-from PyQt6.QtGui import QColor, QKeyEvent
 from PyQt6.QtWidgets import (
-    QFileDialog,
     QHBoxLayout,
     QMessageBox,
-    QPushButton,
     QSizePolicy,
-    QVBoxLayout,
     QWidget,
 )
 
 from automata import Automata
-from data import SAVES_DIR, VIEW_FILE_NAME
-from graphics.view import AutomataGraphView
 from tab.components import *  # noqa: F403
-import utiles
-
-
-class AutomataContainer(QWidget):
-    def __init__(self, parent: QWidget | None = None, buttons_size: int = 55) -> None:
-        super().__init__(parent)
-        self.view = AutomataGraphView()
-        self.view.fitInView(
-            QRectF(0, 0, self.height() * 0.9, self.width() * 0.9),
-            Qt.AspectRatioMode.KeepAspectRatio,
-        )
-        self.view.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-
-        self.word_handler = AutomataWordInput()  # noqa: F405
-        self.word_handler.setMinimumHeight(self.height() // 6)
-        self.word_handler.setMaximumWidth(self.width())
-        self.word_handler.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.word_handler.input_word_edit.textChanged.connect(self.filter_input)
-        self.word_handler.forward_button.clicked.connect(self.forward_click)
-        self.word_handler.backword_button.clicked.connect(self.backward_click)
-
-        automata_layout = QVBoxLayout(self)
-        automata_layout.addWidget(self.view)
-        automata_layout.addWidget(self.word_handler, 0, Qt.AlignmentFlag.AlignTop)
-
-        self.buttons_container = QWidget(self)
-        self.buttons_container.setFixedSize(2 * buttons_size, buttons_size)
-        self.buttons_container.setContentsMargins(7, 7, 0, 0)
-
-        self.save_button = QPushButton("Save")
-        self.save_button.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.save_button.clicked.connect(self.save_view)
-
-        self.load_button = QPushButton("Load")
-        self.load_button.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.load_button.clicked.connect(self.load_view)
-
-        buttons_layout = QHBoxLayout(self.buttons_container)
-        buttons_layout.addWidget(self.load_button)
-        buttons_layout.addWidget(self.save_button)
-        self.buttons_container.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
-        )
-        self.buttons_container.setAttribute(
-            Qt.WidgetAttribute.WA_NoSystemBackground, True
-        )
-        self.buttons_container.setAttribute(
-            Qt.WidgetAttribute.WA_TranslucentBackground, True
-        )
-
-        self.prev_input_word = self.word_handler.input_word
-        self.transitions_history = []
-        self.automata_check = None
-
-    def set_automata_check(self, automata_check: Callable[[Automata], bool]) -> None:
-        self.automata_check = automata_check
-
-    def automata(self) -> Automata:
-        return self.view.to_automata()
-
-    def filter_input(self) -> None:
-        word = self.word_handler.input_word
-        input_alphabet = self.automata().input_alphabet
-        if all(s in input_alphabet for s in word):
-            self.prev_input_word = word
-            return
-        self.word_handler.blockSignals(True)
-        self.word_handler.input_word = self.prev_input_word
-        self.word_handler.blockSignals(False)
-        QMessageBox.warning(self, "Error", "Invalid input symbol")
-
-    def forward_click(self) -> None:
-        if not (self.word_handler.input_word and self.automata_check):
-            return
-
-        automata = self.automata()
-        if not self.automata_check(automata):
-            return
-
-        n = len(self.word_handler.output_word)
-        if n == len(self.word_handler.input_word):
-            return
-
-        if n == 0:
-            self.transitions_history.clear()
-            self.transitions_history.append(automata.initial_state)
-
-        cur_state = self.transitions_history[-1]
-        cur_symb = self.word_handler.input_word[n]
-        state, out_ = automata.transition(cur_symb, cur_state)
-
-        self.word_handler.append_to_output(out_)
-        self.view.mark_node(state, QColor(128, 0, 0))
-        self.transitions_history.append(state)
-
-    def backward_click(self) -> None:
-        if not (self.word_handler.input_word and self.automata_check):
-            return
-
-        if len(self.transitions_history) == 0:
-            return
-
-        # Reduce on 1 symbol output word
-        output_word = self.word_handler.output_word
-        self.word_handler.output_word = output_word[:-1]
-
-        # Mark previous state
-        state = self.transitions_history.pop()
-        self.view.unmark_node(state)
-
-    def keyPressEvent(self, event: QKeyEvent | None) -> None:
-        is_s_key = event.key() == Qt.Key.Key_S
-        is_cntrl_modifier = event.modifiers() == Qt.KeyboardModifier.ControlModifier
-
-        if is_cntrl_modifier and is_s_key:
-            self.save_view()
-
-        return super().keyPressEvent(event)
-
-    def save_view(self) -> None:
-        reply = QMessageBox.question(
-            self,
-            "Confirm",
-            "Do you want to save?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.No:
-            return
-
-        if utiles.json_to_file(self.view.serialize(), SAVES_DIR, VIEW_FILE_NAME):
-            QMessageBox.information(self, "Notification", "saved")
-            return
-
-        QMessageBox.warning(self, "Error", "Automata save failed")
-
-    def load_view(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл", SAVES_DIR, "Все файлы (*.*)"
-        )
-
-        if not file_path:
-            return
-
-        try:
-            self.view.clear_scene()
-            with open(file_path, mode="r") as file:
-                self.view.deserialize(file.read())
-        except IOError:
-            QMessageBox.warning(self, "Error", "Automata save failed")
-        except (json.JSONDecodeError, TypeError):
-            QMessageBox.warning(self, "Error", "File incorrect format")
-        else:
-            QMessageBox.information(self, "Notification", "loaded")
 
 
 class AutomataTabWidget(QWidget):
@@ -229,6 +59,8 @@ class AutomataTabWidget(QWidget):
     def automata_errors_handler(self, automata: Automata) -> bool:
         errors = self.check_automata(automata)
         if len(errors) != 0:
+            errors += [''.join(map(lambda x: '   ' if x % 10 == 1 else str(x) , range(100)))]
+            errors += [''.join(map(lambda x: '   ' if x % 10 == 1 else str(x) , range(100)))]
             self.show_errors(errors)
             return False
         return True
@@ -330,7 +162,7 @@ class AutomataTabWidget(QWidget):
         return automata.detailed_verificatin()
 
     def show_errors(self, errors: list[str]) -> None:
-        if self.side_panel.current_mode == SidePanel.Mode.ERROR_MESSAGES:
+        if self.side_panel.current_mode == SidePanel.Mode.ERROR_MESSAGES:  # noqa: F405
             self.side_panel.clear_messages()
         else:
             self.side_panel.switch_to_messages()
