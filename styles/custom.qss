@@ -9,6 +9,12 @@ AutomataGraphView::viewport {
     background: white; /* Белый фон для области просмотра */
 }
 
+AutomataGraphView > QWidget > QPushButton {
+    background-color: #ffffff;
+    padding: 2px 5px 2px 5px;
+    font-size: 8pt;
+    margin: 0px;
+}
 
 AutomataTabWidget {
     padding: 0px;
@@ -21,31 +27,28 @@ SidePanel QWidget {
     background-color: #83bbaeab;
 }
 
-QScrollArea {
+QListWidget {
     border: 1px solid #83e816;
     font-weight: bold;
 }
 
-SidePanel QScrollArea QLabel {
+SidePanel QListWidget::item {
     border-radius: 4px;
-    padding: 7px 2px 9px 3px;
+}
+
+SidePanel QListWidget::item QLabel {
+    border-radius: 4px;
+    padding: 5px 2px 8px 3px;
     font-family: sans-serif;
-    color: #1d1d1f;
+    color: #d11d1d1f;
     opacity: 0;
     font-size: 12px;
     background-color: #5ef91505; 
 }
 
+SidePanel VerticalMessagesWidget QListWidget QLabel:hover {
 
-SidePanel VerticalMessagesWidget QLabel:hover {
     background-color: #4cf91505;
-}
-
-AutomataContainer QPushButton {
-    background-color: #ffffff;
-    padding: 2px 5px 2px 5px;
-    font-size: 8pt;
-    margin: 0px;
 }
 
 AutomataWordInput QPushButton {
@@ -55,3 +58,19 @@ AutomataWordInput QPushButton {
     padding: 5px 10px;
     border-radius: 3px;
 }
+
+
+
+AutomataContainer > QWidget > QLabel {
+    border: 2px solid #9a8585;
+    background-color: #e0e0e0;
+    font-size: 15pt;
+    font-family: sans-serif;
+}
+
+/* AutomataContainer > QWidget {
+    border: 2px solid #c14545;
+    font-size: 15pt;
+    font-family: sans-serif;
+} */
+

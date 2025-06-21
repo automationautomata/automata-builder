@@ -31,7 +31,7 @@ from data import SAVES_DIR, VIEW_FILE_NAME
 from graphics.view import AutomataGraphView
 from tab.components import *  # noqa: F403
 from utiles import json_to_file
-from widgets import PlotWidget, VerticalMessagesWidget
+from widgets import OverlayWidget, PlotWidget, VerticalMessagesWidget
 
 
 class AlphabetEdit(QTextEdit):
@@ -348,7 +348,6 @@ class AutomataContainer(QWidget):
     def __init__(
         self,
         parent: QWidget | None = None,
-        button_size: int = 55,
         tact_counter_size: int = 100,
     ) -> None:
         super().__init__(parent)
@@ -371,49 +370,18 @@ class AutomataContainer(QWidget):
         self.word_input.forward_button.clicked.connect(self.forward_click)
         self.word_input.backword_button.clicked.connect(self.backward_click)
 
+        # --------------------------------------
+        self.overlay_container = OverlayWidget(self)
+        self.tact_counter = QLabel(self.overlay_container)
+
+        # --------------------------------------
         automata_layout = QVBoxLayout(self)
         automata_layout.addWidget(self.view)
+        automata_layout.addWidget(
+            self.tact_counter, 0, Qt.AlignmentFlag.AlignJustify
+        )
         automata_layout.addWidget(self.word_input, 0, Qt.AlignmentFlag.AlignTop)
 
-        # --------------------------------------
-        # self.overlay_container = QWidget(self.view)
-        # self.overlay_container.setFixedSize(self.view.size())
-
-        # # self.overlay_container.setContentsMargins(6, 7, 0, 0)
-        # self.overlay_container.setAttribute(
-        #     Qt.WidgetAttribute.WA_TransparentForMouseEvents, False
-        # )
-        # self.overlay_container.setAttribute(
-        #     Qt.WidgetAttribute.WA_NoSystemBackground, True
-        # )
-        # self.overlay_container.setAttribute(
-        #     Qt.WidgetAttribute.WA_TranslucentBackground, True
-        # )
-
-        # self.save_button = QPushButton("Save")
-        # self.save_button.setFixedSize(button_size, button_size//2)
-        # self.save_button.clicked.connect(self.save_view)
-
-        # self.load_button = QPushButton("Load")
-        # self.load_button.setFixedSize(button_size, button_size//2)
-        # self.load_button.clicked.connect(self.load_view)
-
-        # buttons_layout = QHBoxLayout()
-        # buttons_layout.addWidget(self.load_button)
-        # buttons_layout.addWidget(self.save_button)
-
-        # self.tact_counter = QLabel('145235')
-        # self.tact_counter.setContentsMargins(0, 0, 0, 0)
-        # self.tact_counter.setFixedSize(tact_counter_size, tact_counter_size)
-
-        # # --------------------------------------
-        # overlay_layout = QVBoxLayout(self.overlay_container)
-        # overlay_layout.addLayout(buttons_layout)
-        # buttons_layout.addStretch(2)
-        # overlay_layout.addWidget(self.tact_counter, 2, Qt.AlignmentFlag.AlignBottom)
-        # self.overlay_container.setLayout(overlay_layout)
-
-        # --------------------------------------
         self.prev_input_word = self.word_input.input_word
         self.transitions_history = []
         self.automata_check = None

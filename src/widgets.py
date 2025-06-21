@@ -2,7 +2,6 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
-
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
@@ -11,12 +10,11 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
+    QListWidget,
     QListWidgetItem,
-    QSizePolicy,
+    QPushButton,
     QVBoxLayout,
     QWidget,
-    QListWidget,
 )
 
 from lang import getlocale
@@ -130,7 +128,7 @@ class TableInputDialog(MultipleInputDialog):
 
 
 class EditableTextItem(QGraphicsTextItem):
-    def __init__(self, text: str = '', parent: QWidget | None = None):
+    def __init__(self, text: str = "", parent: QWidget | None = None):
         super().__init__(text, parent)
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
@@ -138,12 +136,12 @@ class EditableTextItem(QGraphicsTextItem):
             # QGraphicsTextItem.GraphicsItemFlag.ItemIsSelectable |
             QGraphicsTextItem.GraphicsItemFlag.ItemIsFocusable
         )
-    
+
     def keyPressEvent(self, event: QKeyEvent | None) -> None:
         if event.key() == Qt.Key.Key_Enter:
             self.disable_edit()
         return super().keyPressEvent(event)
-    
+
     def enable_edit(self) -> None:
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         self.setFocus()
@@ -218,3 +216,11 @@ class PlotWidget(QWidget):
         ax.plot(x, y)
         ax.set_title(title)
         self.canvas.draw()
+
+
+class OverlayWidget(QWidget):
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)

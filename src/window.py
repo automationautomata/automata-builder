@@ -1,4 +1,3 @@
-
 from PyQt6.QtWidgets import (
     QHBoxLayout,
     QPushButton,
@@ -38,7 +37,7 @@ class MainWindow(QWidget):
         self.btn_add.clicked.connect(self.add_graph_view)
         self.btn_switch.clicked.connect(self.switch_to_next_tab)
         self.add_graph_view()
-        
+
     def add_graph_view(self):
         # Создаем экземпляр нашего виджета вкладки
         tab_content = AutomataTabWidget()

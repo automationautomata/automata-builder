@@ -59,8 +59,6 @@ class AutomataTabWidget(QWidget):
     def automata_errors_handler(self, automata: Automata) -> bool:
         errors = self.check_automata(automata)
         if len(errors) != 0:
-            errors += [''.join(map(lambda x: '   ' if x % 10 == 1 else str(x) , range(100)))]
-            errors += [''.join(map(lambda x: '   ' if x % 10 == 1 else str(x) , range(100)))]
             self.show_errors(errors)
             return False
         return True
@@ -96,6 +94,11 @@ class AutomataTabWidget(QWidget):
         if automata.output_alphabet != output_alphabet and len(input_alphabet) != 0:
             automata.reset_output_order(output_alphabet)
 
+        self.automata_data.set_data(
+            automata.input_alphabet,
+            automata.output_alphabet,
+            automata.initial_state,
+        )
         prec = 20
         x, y = [], []
         for i in range(prec):

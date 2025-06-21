@@ -1,6 +1,7 @@
 import json
+import os
 
-from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import (
     QAction,
     QBrush,
@@ -10,11 +11,14 @@ from PyQt6.QtGui import (
     QPainter,
     QWheelEvent,
 )
+from PyQt6.QtSvg import QSvgGenerator
 from PyQt6.QtWidgets import (
+    QFileDialog,
     QGraphicsScene,
     QGraphicsSceneContextMenuEvent,
     QGraphicsSceneMouseEvent,
     QGraphicsView,
+    QHBoxLayout,
     QMenu,
     QMessageBox,
     QPushButton,
@@ -22,8 +26,11 @@ from PyQt6.QtWidgets import (
 )
 
 from automata import Automata
+from data import SAVES_DIR, VIEW_FILE_NAME
 from graphics.items import Edge, Node
+from utiles import json_to_file
 from widgets import (
+    OverlayWidget,
     TableInputDialog,
     VerticalInputDialog,
 )
@@ -104,7 +111,7 @@ class EdgeEditDialog(TableInputDialog):
         return values
 
 
-class AutomataDrawScene(QGraphicsScene):
+class AutomataDrawingScene(QGraphicsScene):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -120,17 +127,21 @@ class AutomataDrawScene(QGraphicsScene):
         return [n.name for n in self.marked_nodes_]
 
     def keyPressEvent(self, event: QKeyEvent | None) -> None:
-        key_pressed = event.key()
-        if key_pressed == Qt.Key.Key_Delete:
+        key = event.key()
+        modifier = event.modifiers()
+        if key == Qt.Key.Key_Delete:
             selected = self.selectedItems()
+
+            selected_edges = [item for item in selected if isinstance(item, Edge)]
+            while len(selected_edges) > 0:
+                self.delete_edge(selected_edges.pop())
 
             selected_nodes = [item for item in selected if isinstance(item, Node)]
             while len(selected_nodes) > 0:
                 self.delete_node(selected_nodes.pop())
 
-            selected_edges = [item for item in selected if isinstance(item, Edge)]
-            while len(selected_edges) > 0:
-                self.delete_edge(selected_edges.pop())
+        if key == Qt.Key.Key_A and modifier == Qt.KeyboardModifier.ControlModifier:
+            self.select_all()
 
         return super().keyPressEvent(event)
 
@@ -312,6 +323,12 @@ class AutomataDrawScene(QGraphicsScene):
         input_field = VerticalInputDialog("Вход", "Выход:")
         return input_field.get_values()
 
+    def select_all(self) -> None:
+        for node in self.nodes.values():
+            node.setSelected(True)
+        for edge in self.edges:
+            edge.setSelected(True)
+
     def mark_node(self, node_name: str, color: QColor) -> None:
         if node_name not in self.nodes:
             raise ValueError()
@@ -375,11 +392,32 @@ class AutomataDrawScene(QGraphicsScene):
 
 
 class AutomataGraphView(QGraphicsView):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, button_size: int = 40) -> None:
         super().__init__(parent)
-        self.scene_ = AutomataDrawScene(self)
+        self.scene_ = AutomataDrawingScene(self)
         self.setScene(self.scene_)
         self.setWhatsThis("Это описание данного виджета или кнопки.")
+
+        self.overlay_container = OverlayWidget(self)
+        self.overlay_container.setContentsMargins(0, 0, 0, 0)
+
+        self.save_button = QPushButton("Save")
+        self.save_button.setFixedSize(button_size, button_size // 2)
+        self.save_button.clicked.connect(self.save_view)
+
+        self.load_button = QPushButton("Load")
+        self.load_button.setFixedSize(button_size, button_size // 2)
+        self.load_button.clicked.connect(self.load_view)
+
+        self.svg_export_button = QPushButton("Export to svg")
+        self.svg_export_button.setMinimumSize(button_size, button_size // 2)
+        self.svg_export_button.clicked.connect(self.save_as_svg)
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(self.load_button)
+        buttons_layout.addWidget(self.save_button)
+        buttons_layout.addWidget(self.svg_export_button)
+        self.overlay_container.setLayout(buttons_layout)
 
         self.setRenderHints(
             QPainter.RenderHint.Antialiasing
@@ -446,21 +484,78 @@ class AutomataGraphView(QGraphicsView):
     def unmark_node(self, node_name: str) -> None:
         self.scene_.unmark_node(node_name)
 
-    def load_scene(self, json_str: str) -> None:
-        self.scene_.deserialize(json_str)
+    def save_view(self) -> None:
+        reply = QMessageBox.question(
+            self,
+            "Confirm",
+            "Do you want to save?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.No:
+            return
 
-    def dump_scene(self) -> None:
-        return self.scene_.serialize()
+        if json_to_file(self.scene_.serialize(), SAVES_DIR, VIEW_FILE_NAME):
+            QMessageBox.information(self, "Notification", "saved")
+            return
+
+        QMessageBox.warning(self, "Error", "Automata save failed")
+
+    def load_view(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите файл", SAVES_DIR, "Все файлы (*.*)"
+        )
+
+        if not file_path:
+            return
+
+        try:
+            self.clear_scene()
+            with open(file_path, mode="r") as file:
+                self.scene_.deserialize(file.read())
+        except IOError:
+            QMessageBox.warning(self, "Error", "Automata save failed")
+        except (json.JSONDecodeError, TypeError):
+            QMessageBox.warning(self, "Error", "File incorrect format")
+        else:
+            QMessageBox.information(self, "Notification", "loaded")
+
+    def save_as_svg(self, filename: str) -> None:
+        start_path = os.path.join(SAVES_DIR, VIEW_FILE_NAME)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save File",
+            start_path,  # starting directory or filename
+            "Text Files (*.svg);;All Files (*)",  # file filters
+        )
+        if not file_path:
+            return
+        try:
+            scene_rect = self.scene_.itemsBoundingRect()
+
+            generator = QSvgGenerator()
+            generator.setFileName(filename)
+            generator.setSize(scene_rect.size().toSize())
+            generator.setViewBox(scene_rect)
+
+            painter = QPainter()
+            painter.begin(generator)
+            self.scene_.render(painter)
+            painter.end()
+        except IOError:
+            QMessageBox.warning(self, "Error", "Automata save failed")
 
     def to_automata(self) -> Automata:
         initial_state = ""
-        if self.scene_.initial_state:
-            initial_state = self.scene_.initial_state.name
-        automata = Automata(list(self.nodes.keys()), initial_state)
-        for name, node in self.nodes.items():
+        scene = self.scene_
+        if scene.initial_state:
+            initial_state = scene.initial_state.name
+
+        automata = Automata(list(scene.nodes.keys()), initial_state)
+        for name, node in scene.nodes.items():
             for dest_name, edge in node.out_edges.items():
-                for in_ in edge.inputs():
-                    for out_ in edge.output(in_):
+                for out_ in edge.outputs():
+                    for in_ in edge.input(out_):
                         automata.add_input(in_)
                         automata.add_output(out_)
                         automata.add_transition(in_, name, dest_name, out_)

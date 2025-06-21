@@ -5,12 +5,12 @@ from typing import Any
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import (
     QBrush,
-    QVector2D,
     QFont,
     QPainterPath,
     QPainterPathStroker,
     QPen,
     QPolygonF,
+    QVector2D,
 )
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
@@ -148,13 +148,13 @@ class Edge(QGraphicsPathItem):
             for output, inputs in self.transitions.items()
         )
 
-    def inputs(self) -> set[str]:
-        return set(self.transitions)
-
-    def output(self, input_value: str) -> list[str]:
-        if input_value not in self.transitions:
+    def input(self, output_value: str) -> set[str]:
+        if output_value not in self.transitions:
             raise KeyError("Input value not in input-output table")
-        return self.transitions[input_value]
+        return self.transitions[output_value].copy()
+
+    def outputs(self) -> list[str]:
+        return list(self.transitions.keys())
 
     def has_transition(self, input_value: str, output_value: str) -> bool:
         if input_value not in self.transitions:
