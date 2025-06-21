@@ -1,6 +1,6 @@
 import json
 
-from PyQt6.QtCore import QPoint, QPointF, Qt
+from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import (
     QAction,
     QBrush,
@@ -12,6 +12,8 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QGraphicsScene,
+    QGraphicsSceneContextMenuEvent,
+    QGraphicsSceneMouseEvent,
     QGraphicsView,
     QMenu,
     QMessageBox,
@@ -102,87 +104,26 @@ class EdgeEditDialog(TableInputDialog):
         return values
 
 
-class AutomataGraphView(QGraphicsView):
+class AutomataDrawScene(QGraphicsScene):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setScene(QGraphicsScene(self))
-        self.setWhatsThis("Это описание данного виджета или кнопки.")
-
-        self.setRenderHints(
-            QPainter.RenderHint.Antialiasing
-            | QPainter.RenderHint.TextAntialiasing
-            | QPainter.RenderHint.SmoothPixmapTransform
-        )
-        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self.customContextMenuRequested.connect(self.context_menu)
 
         self.nodes: dict[str, Node] = {}  # словарь имя-узел
         self.edges: list[Edge] = []
         self.initial_state: Node = None
         self.marked_nodes_: list[Node] = []
         self.selected_nodes: list[Node] = []  # Nodes for connection
-
-        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+        # self.customContextMenuRequested.connect(self.context_menu)
 
     @property
     def marked_nodes(self) -> list[str]:
         return [n.name for n in self.marked_nodes_]
 
-    def clear_scene(self) -> None:
-        self.initial_state = None
-        self.marked_nodes_ = []
-        self.selected_nodes = []
-
-        self.nodes = {}
-        self.edges = []
-        self.scene().clear()
-
-    def load(self, nodes: dict[str, Node], edges: list[Node]) -> None:
-        self.nodes = nodes
-        self.edges = edges
-        for node in self.nodes.values():
-            self.scene().addItem(node)
-        for edge in self.edges:
-            self.scene().addItem(edge)
-
-    def mousePressEvent(self, event: QMouseEvent | None) -> None:
-        super().mousePressEvent(event)
-        # После начала перетаскивания вернуть курсор стрелки
-        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
-
-    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
-        super().mouseReleaseEvent(event)
-        # После отпускания кнопки вернуть курсор стрелки
-        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
-
-    def mouseDoubleClickEvent(self, event: QMouseEvent | None) -> None:
-        scene_pos = self.mapToScene(event.position().toPoint())
-        items = self.scene().items(scene_pos)
-        if len(items) == 0:
-            # Клик по пустому месту — добавляем новый узел в место клика
-            name = f"S{len(self.nodes)}"
-            new_node = Node(name, scene_pos.x(), scene_pos.y())
-            self.scene().addItem(new_node)
-            self.nodes[name] = new_node
-        super().mouseDoubleClickEvent(event)
-        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
-
-    def wheelEvent(self, event: QWheelEvent | None) -> None:
-        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
-            zoom_direction = event.angleDelta().y() > 0
-            self.zoom_scene(zoom_direction, event.position())
-        return super().wheelEvent(event)
-
     def keyPressEvent(self, event: QKeyEvent | None) -> None:
         key_pressed = event.key()
         if key_pressed == Qt.Key.Key_Delete:
-            selected = self.scene().selectedItems()
+            selected = self.selectedItems()
+
             selected_nodes = [item for item in selected if isinstance(item, Node)]
             while len(selected_nodes) > 0:
                 self.delete_node(selected_nodes.pop())
@@ -193,12 +134,24 @@ class AutomataGraphView(QGraphicsView):
 
         return super().keyPressEvent(event)
 
-    def context_menu(self, point: QPoint) -> None:
-        items = self.scene().items(self.mapToScene(point))
+    def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent | None) -> None:
+        scene_pos = event.scenePos()
+        items = self.items(scene_pos)
+        if len(items) == 0:
+            # Клик по пустому месту — добавляем новый узел в место клика
+            name = f"S{len(self.nodes)}"
+            new_node = Node(name, scene_pos.x(), scene_pos.y())
+            self.addItem(new_node)
+            self.nodes[name] = new_node
+        return super().mouseDoubleClickEvent(event)
+
+    def contextMenuEvent(self, event: QGraphicsSceneContextMenuEvent) -> None:
+        point = event.scenePos()
+        items = self.items(point)
         if len(items) != 1:
             return
         item = items[0]
-        menu = QMenu(self)
+        menu = QMenu(self.parent())
 
         # Add actions to the menu
         if isinstance(item, Node):
@@ -207,7 +160,7 @@ class AutomataGraphView(QGraphicsView):
             menu.addActions(self.edge_actions(item))
 
         # Отображаем меню в позиции курсора
-        action = menu.exec(self.mapToGlobal(point))
+        action = menu.exec(event.screenPos())
         # Можно проверить выбранное действие
         if action:
             print(f"Выбрано действие: {action.text()}")
@@ -229,7 +182,7 @@ class AutomataGraphView(QGraphicsView):
             node.name = new_name
             self.nodes[new_name] = node
 
-        selected = self.scene().selectedItems()
+        selected = self.selectedItems()
         selected_nodes = [item for item in selected if isinstance(item, Node)]
         if len(selected_nodes) > 2:
             return []
@@ -270,7 +223,7 @@ class AutomataGraphView(QGraphicsView):
                 return
 
             if len(values) == 0:
-                delete_edge()
+                self.delete_edge(edge)
                 return
 
             edge.transitions = {}
@@ -307,14 +260,14 @@ class AutomataGraphView(QGraphicsView):
         destination.in_edges[source.name] = edge
         self.edges.append(edge)
 
-        self.scene().addItem(edge)
+        self.addItem(edge)
         edge.update_path()
 
     def delete_node(self, node: Node) -> None:
         if node.has_loop():
             edge = node.in_edges.pop(node.name)
             node.out_edges.pop(node.name)
-            self.scene().removeItem(edge)
+            self.removeItem(edge)
             del edge
 
         for src_node in list(node.in_edges.keys()):
@@ -324,7 +277,7 @@ class AutomataGraphView(QGraphicsView):
             edge.source.out_edges.pop(node.name)
 
             # Удаляем само реберо
-            self.scene().removeItem(edge)
+            self.removeItem(edge)
             del edge
 
         for dst_node in list(node.out_edges.keys()):
@@ -333,18 +286,18 @@ class AutomataGraphView(QGraphicsView):
             edge = node.out_edges.pop(dst_node)
             edge.destination.in_edges.pop(node.name)
 
-            self.scene().removeItem(edge)
+            self.removeItem(edge)
             del edge
 
         # Удаляем узел реберо
         self.nodes.pop(node.name)
-        self.scene().removeItem(node)
+        self.removeItem(node)
         del node
 
-    def delete_edge(self, edge: Edge):
+    def delete_edge(self, edge: Edge) -> None:
         edge.source.out_edges.pop(edge.destination.name)
         edge.destination.in_edges.pop(edge.source.name)
-        self.scene().removeItem(edge)
+        self.removeItem(edge)
         del edge
 
     def set_initial_node(self, node: Node) -> Node:
@@ -358,6 +311,112 @@ class AutomataGraphView(QGraphicsView):
     def enter_edge() -> list[str]:
         input_field = VerticalInputDialog("Вход", "Выход:")
         return input_field.get_values()
+
+    def mark_node(self, node_name: str, color: QColor) -> None:
+        if node_name not in self.nodes:
+            raise ValueError()
+        node = self.nodes[node_name]
+        brush = node.brush()
+        brush.setColor(color)
+        node.setBrush(brush)
+        if node not in self.marked_nodes_:
+            self.marked_nodes_.append(node)
+
+    def unmark_node(self, node_name: str) -> None:
+        if node_name not in self.nodes:
+            raise ValueError()
+        node = self.nodes[node_name]
+        brush = node.brush()
+        brush.setColor(node.NO)
+        node.setBrush(brush)
+
+        if node in self.marked_nodes_:
+            self.marked_nodes_.remove(node)
+
+    def serialize(self) -> str:
+        initial_state = ""
+        if self.initial_state:
+            initial_state = self.initial_state.name
+        return {
+            "nodes": [node.serialize() for node in self.nodes.values()],
+            "edges": [edge.serialize() for edge in self.edges],
+            "initial_state": initial_state,
+        }
+
+    def deserialize(self, json_str: str) -> None:
+        data = json.loads(json_str)
+
+        # Восстановить узлы по именам
+        self.nodes = {}
+        for node_data in data["nodes"]:
+            node = Node.deserialize(node_data)
+            self.nodes[node.name] = node
+            self.addItem(node)
+
+        # Восстановить ребра
+        self.edges = []
+        for edge_data in data["edges"]:
+            edge = Edge.deserialize(edge_data, self.nodes)
+            self.edges.append(edge)
+            self.addItem(edge)
+            edge.update_path()
+
+        if data["initial_state"]:
+            name = data["initial_state"]
+            self.set_initial_node(self.nodes[name])
+
+    def clear(self) -> None:
+        super().clear()
+        self.initial_state = None
+        self.marked_nodes_ = []
+        self.selected_nodes = []
+        self.nodes = {}
+        self.edges = []
+
+
+class AutomataGraphView(QGraphicsView):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.scene_ = AutomataDrawScene(self)
+        self.setScene(self.scene_)
+        self.setWhatsThis("Это описание данного виджета или кнопки.")
+
+        self.setRenderHints(
+            QPainter.RenderHint.Antialiasing
+            | QPainter.RenderHint.TextAntialiasing
+            | QPainter.RenderHint.SmoothPixmapTransform
+        )
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    @property
+    def marked_nodes(self) -> list[str]:
+        return self.scene_.marked_nodes_
+
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+        super().mousePressEvent(event)
+        # После начала перетаскивания вернуть курсор стрелки
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
+        super().mouseReleaseEvent(event)
+        # После отпускания кнопки вернуть курсор стрелки
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent | None) -> None:
+        super().mouseDoubleClickEvent(event)
+        self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
+
+    def wheelEvent(self, event: QWheelEvent | None) -> None:
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            zoom_direction = event.angleDelta().y() > 0
+            self.zoom_scene(zoom_direction, event.position())
+        return super().wheelEvent(event)
 
     def zoom_scene(
         self, zoom_direction: bool, pos: QPointF, zoom_in_factor: float = 1.25
@@ -382,30 +441,21 @@ class AutomataGraphView(QGraphicsView):
         self.translate(delta.x(), delta.y())
 
     def mark_node(self, node_name: str, color: QColor) -> None:
-        if node_name not in self.nodes:
-            raise ValueError()
-        node = self.nodes[node_name]
-        brush = node.brush()
-        brush.setColor(color)
-        node.setBrush(brush)
-        if node not in self.marked_nodes_:
-            self.marked_nodes_.append(node)
+        self.scene_.mark_node(node_name, color)
 
     def unmark_node(self, node_name: str) -> None:
-        if node_name not in self.nodes:
-            raise ValueError()
-        node = self.nodes[node_name]
-        brush = node.brush()
-        brush.setColor(node.NO)
-        node.setBrush(brush)
+        self.scene_.unmark_node(node_name)
 
-        if node in self.marked_nodes_:
-            self.marked_nodes_.remove(node)
+    def load_scene(self, json_str: str) -> None:
+        self.scene_.deserialize(json_str)
+
+    def dump_scene(self) -> None:
+        return self.scene_.serialize()
 
     def to_automata(self) -> Automata:
         initial_state = ""
-        if self.initial_state:
-            initial_state = self.initial_state.name
+        if self.scene_.initial_state:
+            initial_state = self.scene_.initial_state.name
         automata = Automata(list(self.nodes.keys()), initial_state)
         for name, node in self.nodes.items():
             for dest_name, edge in node.out_edges.items():
@@ -419,37 +469,8 @@ class AutomataGraphView(QGraphicsView):
         automata.reset_output_order(sorted(automata.output_alphabet))
         return automata
 
-    def serialize(self) -> str:
-        initial_state = ""
-        if self.initial_state:
-            initial_state = self.initial_state.name
-        return {
-            "nodes": [node.serialize() for node in self.nodes.values()],
-            "edges": [edge.serialize() for edge in self.edges],
-            "initial_state": initial_state,
-        }
-
-    def deserialize(self, json_str: str) -> tuple[dict[str, Node], list[Edge]]:
-        data = json.loads(json_str)
-
-        # Восстановить узлы по именам
-        self.nodes = {}
-        for node_data in data["nodes"]:
-            node = Node.deserialize(node_data)
-            self.nodes[node.name] = node
-            self.scene().addItem(node)
-
-        # Восстановить ребра
-        self.edges = []
-        for edge_data in data["edges"]:
-            edge = Edge.deserialize(edge_data, self.nodes)
-            self.edges.append(edge)
-            self.scene().addItem(edge)
-            edge.update_path()
-
-        if data["initial_state"]:
-            name = data["initial_state"]
-            self.set_initial_node(self.nodes[name])
+    def clear_scene(self) -> None:
+        self.scene().clear()
 
     # def resizeEvent(self, event: QResizeEvent | None) -> None:
     #     old_size, new_size = event.oldSize(), event.size()
