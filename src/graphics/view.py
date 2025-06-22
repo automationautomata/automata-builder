@@ -360,9 +360,7 @@ class AutomataDrawingScene(QGraphicsScene):
             "initial_state": initial_state,
         }
 
-    def deserialize(self, json_str: str) -> None:
-        data = json.loads(json_str)
-
+    def deserialize(self, data: dict) -> None:
         # Восстановить узлы по именам
         self.nodes = {}
         for node_data in data["nodes"]:

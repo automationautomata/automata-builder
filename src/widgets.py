@@ -1,3 +1,4 @@
+from typing import Callable
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
@@ -15,6 +16,9 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
 )
 
 from lang import getlocale
@@ -164,9 +168,6 @@ class VerticalMessagesWidget(QListWidget):
         label = QLabel(text)
         label.setContentsMargins(0, 0, 0, 0)
         label.setMaximumWidth(self.width())
-        # label.setSizePolicy(
-        #     QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
-        # )
 
         label.setWordWrap(True)
         self.addItem(item)
@@ -224,3 +225,25 @@ class OverlayWidget(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+
+
+class TableWidget(QTableWidget):
+    def __init__(
+        self,
+        data: list,
+        column_names: list[str] | None = None,
+        row_names: list[str] | None = None,
+        parent: QWidget | None = None,
+    ):
+        super().__init__(parent)
+        for i, row in enumerate(data):
+            for j, item in enumerate(row):
+                self.setItem(i, j, QTableWidgetItem(item))
+
+        if row_names:
+            self.setHorizontalHeaderLabels(row_names)
+        if column_names:
+            self.setVerticalHeaderLabels(column_names)
+
+        self.horizontalHeader().setStretchLastSection(True)
+        # self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)

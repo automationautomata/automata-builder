@@ -14,15 +14,14 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
+    QGraphicsItem,
     QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsSceneMouseEvent,
     QGraphicsTextItem,
 )
 
-from widgets import (
-    EditableTextItem,
-)
+from widgets import EditableTextItem
 
 
 class Node(QGraphicsEllipseItem):
@@ -141,6 +140,9 @@ class Edge(QGraphicsPathItem):
         self.bend_offset = 5.0
         self.click_area_size = click_area_size
 
+    def isloop(self):
+        return self.destination is self.source
+
     @property
     def edge_text(self) -> str:
         return ", ".join(
@@ -200,7 +202,7 @@ class Edge(QGraphicsPathItem):
         # Создаем новую область с шириной 'width' вокруг исходного пути
         return expanded_path
 
-    def itemChange(self, change, value):
+    def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value: Any) -> Any:
         if change == self.GraphicsItemChange.ItemSelectedHasChanged:
             pen_width = self.pen().width()
             if value:
@@ -263,15 +265,25 @@ class Edge(QGraphicsPathItem):
 
     def update_path(self) -> None:
         path = QPainterPath()
-        source_point = self.get_boundary_point(self.source, self.destination)
-        dest_point = self.get_boundary_point(self.destination, self.source)
+        if self.isloop():
+            rect = self.source.rect()
+            top_center = self.source.mapToScene(QPointF(rect.center().x(), rect.top()))
+            path.moveTo(top_center)
 
-        control_point = self.get_control_point(
-            source_point, dest_point, self.bend_ratio, self.bend_offset
-        )
+            x_offset, y_offset = 40, 50
+            ctrlPt1 = QPointF(top_center.x() - x_offset, top_center.y() - y_offset)
+            ctrlPt2 = QPointF(top_center.x() + x_offset, top_center.y() - y_offset)
 
-        path.moveTo(source_point)
-        path.quadTo(control_point, dest_point)
+            path.cubicTo(ctrlPt2, ctrlPt1, top_center)
+        else:
+            source_point = self.get_boundary_point(self.source, self.destination)
+            dest_point = self.get_boundary_point(self.destination, self.source)
+            control_point = self.get_control_point(
+                source_point, dest_point, self.bend_ratio, self.bend_offset
+            )
+            path.moveTo(source_point)
+            path.quadTo(control_point, dest_point)
+
         self.setPath(path)
         self.draw_arrowhead()
         self.create_edge_text()

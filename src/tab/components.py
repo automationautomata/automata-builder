@@ -1,22 +1,22 @@
 import enum
-import json
 from typing import Callable
 
 from PyQt6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
+    QPoint,
     QPropertyAnimation,
     QRectF,
     QSequentialAnimationGroup,
     Qt,
 )
-from PyQt6.QtGui import QColor, QKeyEvent
+from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
 from PyQt6.QtWidgets import (
-    QFileDialog,
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSizePolicy,
@@ -27,10 +27,8 @@ from PyQt6.QtWidgets import (
 )
 
 from automata import Automata
-from data import SAVES_DIR, VIEW_FILE_NAME
 from graphics.view import AutomataGraphView
 from tab.components import *  # noqa: F403
-from utiles import json_to_file
 from widgets import OverlayWidget, PlotWidget, VerticalMessagesWidget
 
 
@@ -344,11 +342,54 @@ class AutomataWordInput(QWidget):
         self.output_word_edit.setText(output_word)
 
 
+class TactCounter(OverlayWidget):
+    def __init__(self, parent: QWidget | None = None):
+        super().__init__(parent)
+        self.value_ = 0
+        self.counter = QLabel("0", self)
+        self.counter.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.custom_menu)
+
+    def custom_menu(self, point: QPoint):
+        menu = QMenu(self)
+
+        hide_action = QAction("Скрыть")
+        hide_action.triggered.connect(lambda: self.setHidden(True))
+
+        menu.addAction(hide_action)
+        menu.exec(self.mapToGlobal(point))
+
+    @property
+    def value(self):
+        return self.value_
+
+    @value.setter
+    def value(self, new_value: int):
+        self.value_ = new_value
+        self.counter.setText(str(self.value))
+        self.counter.adjustSize()
+
+    def increnemt(self):
+        self.value_ += 1
+        self.counter.setText(str(self.value))
+        self.counter.adjustSize()
+
+    def decrement(self):
+        self.value_ -= 1
+        self.counter.setText(str(self.value))
+        self.counter.adjustSize()
+
+
 class AutomataContainer(QWidget):
+    MARKED_NODE_COLOR = QColor(128, 0, 0)
+
     def __init__(
         self,
         parent: QWidget | None = None,
-        tact_counter_size: int = 100,
     ) -> None:
         super().__init__(parent)
         self.view = AutomataGraphView()
@@ -370,21 +411,42 @@ class AutomataContainer(QWidget):
         self.word_input.forward_button.clicked.connect(self.forward_click)
         self.word_input.backword_button.clicked.connect(self.backward_click)
 
-        # --------------------------------------
-        self.overlay_container = OverlayWidget(self)
-        self.tact_counter = QLabel(self.overlay_container)
+        layout = QVBoxLayout()
+        layout.addWidget(self.view)
+        layout.addWidget(self.word_input, 0, Qt.AlignmentFlag.AlignTop)
+        self.setLayout(layout)
 
         # --------------------------------------
-        automata_layout = QVBoxLayout(self)
-        automata_layout.addWidget(self.view)
-        automata_layout.addWidget(
-            self.tact_counter, 0, Qt.AlignmentFlag.AlignJustify
-        )
-        automata_layout.addWidget(self.word_input, 0, Qt.AlignmentFlag.AlignTop)
+        self.tact_counter = TactCounter(self)  # tact counter overlay view
+        self.tact_counter.setHidden(True)
+        # --------------------------------------
 
         self.prev_input_word = self.word_input.input_word
         self.transitions_history = []
         self.automata_check = None
+
+    def resizeEvent(self, event: QResizeEvent | None = None):
+        self.draw_tact_counter()
+        return super().resizeEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent | None) -> None:
+        key = event.key()
+        modifier = event.modifiers()
+
+        if key == Qt.Key.Key_S and modifier == Qt.KeyboardModifier.ControlModifier:
+            self.save_view()
+
+        return super().keyPressEvent(event)
+
+    def draw_tact_counter(self):
+        shift = 10
+        pos = self.view.geometry().bottomLeft()
+        pos.setX(pos.x() + shift)
+        pos.setY(pos.y() - shift)
+
+        new_geom = self.tact_counter.geometry()
+        new_geom.moveBottomLeft(pos)
+        self.tact_counter.setGeometry(new_geom)
 
     def set_automata_check(self, automata_check: Callable[[Automata], bool]) -> None:
         self.automata_check = automata_check
@@ -421,11 +483,20 @@ class AutomataContainer(QWidget):
 
         cur_state = self.transitions_history[-1]
         cur_symb = self.word_input.input_word[n]
-        state, out_ = automata.transition(cur_symb, cur_state)
+        new_state, out_ = automata.transition(cur_symb, cur_state)
+
+        self.view.unmark_node(cur_state)
+        self.view.mark_node(new_state, self.MARKED_NODE_COLOR)
 
         self.word_input.append_to_output(out_)
-        self.view.mark_node(state, QColor(128, 0, 0))
-        self.transitions_history.append(state)
+        self.transitions_history.append(new_state)
+
+        if self.tact_counter.isHidden():
+            # if tact_counter was closed
+            self.tact_counter.setVisible(True)
+            self.tact_counter.value = n
+        else:
+            self.tact_counter.increnemt()
 
     def backward_click(self) -> None:
         if not (self.word_input.input_word and self.automata_check):
@@ -442,47 +513,12 @@ class AutomataContainer(QWidget):
         state = self.transitions_history.pop()
         self.view.unmark_node(state)
 
-    def keyPressEvent(self, event: QKeyEvent | None) -> None:
-        is_s_key = event.key() == Qt.Key.Key_S
-        is_cntrl_modifier = event.modifiers() == Qt.KeyboardModifier.ControlModifier
+        prev_state = self.transitions_history[-1]
+        self.view.mark_node(prev_state, self.MARKED_NODE_COLOR)
 
-        if is_cntrl_modifier and is_s_key:
-            self.save_view()
-
-        return super().keyPressEvent(event)
-
-    def save_view(self) -> None:
-        reply = QMessageBox.question(
-            self,
-            "Confirm",
-            "Do you want to save?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if reply == QMessageBox.StandardButton.No:
-            return
-
-        if json_to_file(self.view.serialize(), SAVES_DIR, VIEW_FILE_NAME):
-            QMessageBox.information(self, "Notification", "saved")
-            return
-
-        QMessageBox.warning(self, "Error", "Automata save failed")
-
-    def load_view(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл", SAVES_DIR, "Все файлы (*.*)"
-        )
-
-        if not file_path:
-            return
-
-        try:
-            self.view.clear_scene()
-            with open(file_path, mode="r") as file:
-                self.view.deserialize(file.read())
-        except IOError:
-            QMessageBox.warning(self, "Error", "Automata save failed")
-        except (json.JSONDecodeError, TypeError):
-            QMessageBox.warning(self, "Error", "File incorrect format")
+        if self.tact_counter.isHidden():
+            # if tact_counter was closed
+            self.tact_counter.setVisible(True)
+            self.tact_counter.value = len(self.word_input.output_word)
         else:
-            QMessageBox.information(self, "Notification", "loaded")
+            self.tact_counter.decrement()

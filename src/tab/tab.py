@@ -267,3 +267,22 @@ class AutomataTabWidget(QWidget):
             group.finished.connect(after_finish)
 
         group.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+
+    def load(self, data: dict) -> None:
+        automata_data = data["automata_data"]
+        self.automata_data.set_data(
+            automata_data["input_alphabet"],
+            automata_data["output_alphabet"],
+            automata_data["initial_state"],
+        )
+        scene = self.automata_container.view.scene()
+        scene.deserialize(data["scene"])
+
+    def dump(self) -> dict:
+        automata_data = {
+            "input_alphabet": self.automata_data.input_alphabet(),
+            "output_alphabet": self.automata_data.output_alphabet(),
+            "initial_state": self.automata_data.initial_state(),
+        }
+        scene = self.automata_container.view.scene()
+        return {"automata_data": automata_data, "scene": scene.serialize()}
