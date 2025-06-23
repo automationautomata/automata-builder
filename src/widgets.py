@@ -182,12 +182,15 @@ class VerticalMessagesWidget(QListWidget):
             raise ValueError(
                 "The message position must be less than the number of messages"
             )
+        
         message_item = self.item(message_pos)
         if not message_item:
             return
+        
         message = self.itemWidget(message_item)
         if not message:
             return
+        
         self.removeItemWidget(message_item)
         message.deleteLater()
 

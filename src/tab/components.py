@@ -164,6 +164,9 @@ class AutomataDataWidget(QWidget):
         self.output_alphabet_field.setText("{" + ", ".join(output_alphabet) + "}")
         self.initial_state_field.setText(initial_state)
 
+    def is_empty(self):
+        return self.input_alphabet() or self.output_alphabet() or self.initial_state()
+
 
 class SidePanel(QWidget):
     class Mode(enum.Enum):
@@ -434,7 +437,7 @@ class AutomataContainer(QWidget):
         modifier = event.modifiers()
 
         if key == Qt.Key.Key_S and modifier == Qt.KeyboardModifier.ControlModifier:
-            self.save_view()
+            self.view.save_view()
 
         return super().keyPressEvent(event)
 
@@ -494,7 +497,7 @@ class AutomataContainer(QWidget):
         if self.tact_counter.isHidden():
             # if tact_counter was closed
             self.tact_counter.setVisible(True)
-            self.tact_counter.value = n
+            self.tact_counter.value = n + 1
         else:
             self.tact_counter.increnemt()
 
@@ -512,9 +515,9 @@ class AutomataContainer(QWidget):
         # Mark previous state
         state = self.transitions_history.pop()
         self.view.unmark_node(state)
-
-        prev_state = self.transitions_history[-1]
-        self.view.mark_node(prev_state, self.MARKED_NODE_COLOR)
+        if len(self.transitions_history) != 0:
+            prev_state = self.transitions_history[-1]
+            self.view.mark_node(prev_state, self.MARKED_NODE_COLOR)
 
         if self.tact_counter.isHidden():
             # if tact_counter was closed
@@ -522,3 +525,6 @@ class AutomataContainer(QWidget):
             self.tact_counter.value = len(self.word_input.output_word)
         else:
             self.tact_counter.decrement()
+
+    def is_empty_scene(self):
+        return self.view.is_empty()

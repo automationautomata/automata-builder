@@ -35,5 +35,6 @@ locale = load_locales(LOCALE_DIR)
 
 current_lang = BASE_LANG
 
+
 def getlocale(name):
     return locale[current_lang][name]

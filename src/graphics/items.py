@@ -169,7 +169,7 @@ class Edge(QGraphicsPathItem):
         elif input_value in self.transitions[output_value]:
             return
 
-        self.transitions[input_value].append(output_value)
+        self.transitions[output_value].append(input_value)
         if not self.text_item:
             return
 
@@ -180,7 +180,6 @@ class Edge(QGraphicsPathItem):
         self.text_font.setPointSizeF(font_size - 0.12)
         self.text_item.setFont(self.text_font)
         self.text_item.setPlainText(self.edge_text)
-        self.is_reversed = self.destination.name in self.source.in_edges
 
     def remove_transition(self, input_value: str, output_value: str) -> None:
         if input_value not in self.transitions:
@@ -191,7 +190,6 @@ class Edge(QGraphicsPathItem):
         self.transitions[input_value].remove(output_value)
         if len(self.transitions[input_value]) == 0:
             del self.transitions[input_value]
-        self.is_reversed = self.destination.name in self.source.in_edges
 
     def shape(self) -> QPainterPath:
         original_path = super().shape()
@@ -431,6 +429,8 @@ class Edge(QGraphicsPathItem):
             "transitions": self.transitions,  # первый ключ или по необходимости
             "source": self.source.name,
             "destination": self.destination.name,
+            "bend_ratio": self.bend_ratio, 
+            "bend_offset": self.bend_offset
         }
 
     @staticmethod
@@ -440,6 +440,8 @@ class Edge(QGraphicsPathItem):
         transitions = data["transitions"]
 
         edge = Edge("", "", source, dest)
+        edge.bend_ratio = data["bend_ratio"]
+        edge.bend_offset = data["bend_offset"]
         edge.transitions = copy.deepcopy(transitions)
         source.out_edges[dest.name] = edge
         dest.in_edges[source.name] = edge

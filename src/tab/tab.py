@@ -286,3 +286,6 @@ class AutomataTabWidget(QWidget):
         }
         scene = self.automata_container.view.scene()
         return {"automata_data": automata_data, "scene": scene.serialize()}
+
+    def is_empty(self):
+        return self.automata_container.is_empty_scene() or self.automata_data.is_empty()

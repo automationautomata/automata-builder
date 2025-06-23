@@ -1,3 +1,12 @@
+QTabBar::close-button {
+    /* Используйте иконку или задайте цвет */
+    image: url("../styles/icons8-close.svg");
+    border-radius: 8px;
+}
+QTabBar::close-button:hover {
+    background-color: #d9534f;
+}
+
 /*QGraphicsView*/
 AutomataGraphView {
     background-color: white; /* Общий белый фон */
@@ -47,7 +56,6 @@ SidePanel QListWidget::item QLabel {
 }
 
 SidePanel VerticalMessagesWidget QListWidget QLabel:hover {
-
     background-color: #4cf91505;
 }
 
@@ -59,13 +67,12 @@ AutomataWordInput QPushButton {
     border-radius: 3px;
 }
 
-
-
-AutomataContainer > QWidget > QLabel {
-    border: 2px solid #9a8585;
-    background-color: #e0e0e0;
+AutomataContainer > OverlayWidget > QLabel {
+    padding: 1px;
+    border: 0.5px solid#90b6b6b6;
+    background-color:  #43d2cbcb;
     font-size: 15pt;
-    font-family: sans-serif;
+    font-family: "Sans Mono";
 }
 
 /* AutomataContainer > QWidget {

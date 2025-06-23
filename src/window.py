@@ -10,11 +10,13 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QSizePolicy,
+    QFileDialog,
 )
 
 import lang
 import utiles
-from data import SAVES_DIR, SESSION_EXT
+from data import SAVES_DIR, SESSION_EXT, SESSIONS_DIR
 from tab.tab import AutomataTabWidget
 
 
@@ -25,31 +27,38 @@ class MainWindow(QWidget):
         self.setWindowTitle("QTabWidget с QGraphicsView")
         self.resize(850, 720)
 
-        main_layout = QVBoxLayout(self)
-        self.setLayout(main_layout)
-
-        # Создаем QTabWidget
+        
         self.tab_widget = QTabWidget(self)
-        main_layout.addWidget(self.tab_widget)
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.tabCloseRequested.connect(self.close_tab)
+        
 
-        # Создаем кнопки
-        button_layout = QHBoxLayout(self)
-        self.btn_add = QPushButton("Add AutomataGraphView", self)
-        self.btn_switch = QPushButton("Switch to Next Tab", self)
+        self.btn_add = QPushButton("Add AutomataGraphView")
+        self.btn_add.clicked.connect(self.add_graph_view)
 
+        self.btn_switch = QPushButton("Switch to Next Tab")
+        self.btn_switch.clicked.connect(self.switch_to_next_tab)
+
+        self.btn_load = QPushButton("Load Session")
+        self.btn_load.setMaximumWidth(100)
+        self.btn_load.clicked.connect(self.choose_session)
+
+        button_layout = QHBoxLayout()
         button_layout.addWidget(self.btn_add)
         button_layout.addWidget(self.btn_switch)
+        button_layout.addWidget(self.btn_load)
+        
+        main_layout = QVBoxLayout()
+        main_layout.addWidget(self.tab_widget)
         main_layout.addLayout(button_layout)
+        self.setLayout(main_layout)
 
         self.tabs: list[AutomataTabWidget] = []
 
-        # Обработчики
-        self.btn_add.clicked.connect(self.add_graph_view)
-        self.btn_switch.clicked.connect(self.switch_to_next_tab)
-        self.load_session()
-
+        if not self.load_last_session():
+            self.add_graph_view()
+    
     def add_graph_view(self):
-        # Создаем экземпляр нашего виджета вкладки
         tab_content = AutomataTabWidget()
 
         tab_name = f"View {self.tab_widget.count() + 1}"
@@ -67,7 +76,25 @@ class MainWindow(QWidget):
         next_index = (current_index + 1) % count
         self.tab_widget.setCurrentIndex(next_index)
 
-    def save_session(self) -> None:
+    def close_tab(self, index: int):
+        view = self.tabs[index].automata_container.view
+        if not view.is_empty():
+            reply = QMessageBox.question(
+                self,
+                "Confirm",
+                "Do you want to save automata?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                view.save_view()
+        self.tabs.pop(index)
+        self.tab_widget.removeTab(index) 
+        
+    def save_session(self) -> bool:
+        if all(tab.is_empty() for tab in self.tabs):
+            return True
+
         reply = QMessageBox.question(
             self,
             "Confirm",
@@ -76,15 +103,15 @@ class MainWindow(QWidget):
             QMessageBox.StandardButton.Yes,
         )
         if reply == QMessageBox.StandardButton.No:
-            return
-        
+            return True
+
         session_data = []
         for tab in self.tabs:
             session_data.append(tab.dump())
 
         fmt_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"{fmt_date}.{SESSION_EXT}"
-        if not utiles.json_to_file(session_data, SAVES_DIR, filename):
+        if not utiles.json_to_file(session_data, SESSIONS_DIR, filename):
             reply = QMessageBox.question(
                 self,
                 "Error",
@@ -92,13 +119,17 @@ class MainWindow(QWidget):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
-            return reply != QMessageBox.StandardButton.No
+            if reply == QMessageBox.StandardButton.No:
+                return False
         return True
 
-    def load_session(self) -> None:
-        sessions = [f for f in os.listdir(SAVES_DIR) if f.endswith(SESSION_EXT)]
+    def load_last_session(self) -> bool:
+        if not os.path.exists(SESSIONS_DIR):
+            os.mkdir(SESSIONS_DIR)
+
+        sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(SESSION_EXT)]
         if len(sessions) == 0:
-            return
+            return False
 
         reply = QMessageBox.question(
             self,
@@ -108,11 +139,32 @@ class MainWindow(QWidget):
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.No:
-            return
+            return False
 
-        last_session = sorted(s.split(".")[0] for s in sessions)[-1]
-        path = os.path.join(SAVES_DIR, f"{last_session}.{SESSION_EXT}")
-        with open(path, mode="r") as session_file:
+        last_session = sorted(os.path.splitext(s)[0] for s in sessions)[-1]
+        path = os.path.join(SESSIONS_DIR, f"{last_session}.{SESSION_EXT}")
+        self.load_session(path)
+
+    def choose_session(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите файл", SESSIONS_DIR, "Все файлы (*.*)"
+        )
+
+        if not file_path:
+            return True
+        try:
+            self.load_session(file_path)
+        except IOError:
+            QMessageBox.warning(self, "Error", "Session load failed")
+        except (json.JSONDecodeError, TypeError):
+            QMessageBox.warning(self, "Error", "File incorrect format")
+        else:
+            QMessageBox.information(self, "Notification", "loaded")
+
+        return True
+
+    def load_session(self, session_path: str):
+        with open(session_path, mode="r") as session_file:
             session_data = json.loads(session_file.read())
             for data in session_data:
                 self.add_graph_view()

@@ -4,3 +4,4 @@ __pycache__
 tmp.py
 tasks.md
 saves/**
+.ruff_cache

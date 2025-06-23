@@ -105,9 +105,9 @@ class Automata:
         self.output_function_.update({state: dict.fromkeys(self.input_alphabet_, "")})
 
     def add_input(self, symbol: str) -> None:
-        self.input_alphabet_[symbol] = self.input_alphabet_.get(
-            symbol, len(self.input_alphabet_) + 1
-        )
+        if symbol in self.input_alphabet_:
+            return 
+        self.input_alphabet_[symbol] = len(self.input_alphabet_) + 1
         for state in self.transitions_.keys():
             self.transitions_[state][symbol] = ""
             self.output_function_[state][symbol] = ""
@@ -178,18 +178,18 @@ class Automata:
         if not self.initial_state:
             errors.append("There is no initial state")
 
-        for state, tranistions in self.transitions_.items():
-            diff = self.input_alphabet_.keys() - tranistions.keys()
-            if len(diff) != 0:
+        for state, state_tranistions in self.transitions_.items():
+            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
+            if len(empty_tranistions) != 0:
                 errors.append(
-                    f"State {state} must have transition for {diff} input symbols"
+                    f"State {state} must have transition for {empty_tranistions} input symbols"
                 )
 
-        for state, tranistions in self.transitions_.items():
-            diff = self.input_alphabet_.keys() - tranistions.keys()
-            if len(diff) != 0:
+        for state, state_tranistions in self.output_function_.items():
+            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
+            if len(empty_tranistions) != 0:
                 errors.append(
-                    f"State {state} must have output for {diff} input alphabet"
+                    f"State {state} must have output for {empty_tranistions} input alphabet"
                 )
 
         return errors

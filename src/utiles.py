@@ -10,7 +10,7 @@ def load_stylesheet(filename: str):
         filename = f"{filename}.qss"
 
     path = join(STYLESHEETS_DIR, filename)
-    with open(path, "r") as stylesheet_file:
+    with open(path, "r", encoding='utf-8',) as stylesheet_file:
         return stylesheet_file.read()
 
 

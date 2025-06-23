@@ -10,6 +10,8 @@ STYLESHEETS_DIR = join(BASE_DIR, "styles")
 
 VIEW_FILE_NAME = "automata"
 
-BASE_LANG = 'en'
+BASE_LANG = "en"
 
-SESSION_EXT = 'session'
+SESSION_EXT = "session"
+
+SESSIONS_DIR = join(SAVES_DIR, "sessions")

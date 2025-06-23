@@ -39,11 +39,11 @@ from widgets import (
 class EdgeEditDialog(TableInputDialog):
     def __init__(self, edge: Edge, title: str = "") -> None:
         self.transitions = []
-        for in_ in edge.inputs():
-            for out_ in edge.output(in_):
+        for in_ in edge.outputs():
+            for out_ in edge.input(in_):
                 self.transitions.append([in_, out_])
 
-        row_labels = [[f"{r[0]}:", f"{r[1]}:"] for r in self.transitions]
+        row_labels = [[f"{r[1]}:", f"{r[0]}:"] for r in self.transitions]
         super().__init__(*row_labels, col_titles=["Вход", "Выход"], title=title)
 
         for i in range(len(self.transitions)):
@@ -112,6 +112,7 @@ class EdgeEditDialog(TableInputDialog):
 
 
 class AutomataDrawingScene(QGraphicsScene):
+    INITIAL_STATE_COLOR = QColor(128, 25, 90, 180)
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -312,11 +313,10 @@ class AutomataDrawingScene(QGraphicsScene):
         del edge
 
     def set_initial_node(self, node: Node) -> Node:
-        color = QColor(128, 25, 90, 180)  # Standard purple color
         if self.initial_state:
             self.initial_state.setBrush(QBrush(node.NODE_COLOR))
         self.initial_state = node
-        node.setBrush(QBrush(color))
+        node.setBrush(self.INITIAL_STATE_COLOR)
 
     @staticmethod
     def enter_edge() -> list[str]:
@@ -344,7 +344,10 @@ class AutomataDrawingScene(QGraphicsScene):
             raise ValueError()
         node = self.nodes[node_name]
         brush = node.brush()
-        brush.setColor(node.NO)
+        if node is not self.initial_state:
+            brush.setColor(node.NODE_COLOR)
+        else:
+            brush.setColor(self.INITIAL_STATE_COLOR)
         node.setBrush(brush)
 
         if node in self.marked_nodes_:
@@ -483,14 +486,10 @@ class AutomataGraphView(QGraphicsView):
         self.scene_.unmark_node(node_name)
 
     def save_view(self) -> None:
-        reply = QMessageBox.question(
-            self,
-            "Confirm",
-            "Do you want to save?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите файл", SAVES_DIR, f"Все файлы ({VIEW_FILE_NAME}.json)"
         )
-        if reply == QMessageBox.StandardButton.No:
+        if not file_path:
             return
 
         if json_to_file(self.scene_.serialize(), SAVES_DIR, VIEW_FILE_NAME):
@@ -510,7 +509,7 @@ class AutomataGraphView(QGraphicsView):
         try:
             self.clear_scene()
             with open(file_path, mode="r") as file:
-                self.scene_.deserialize(file.read())
+                self.scene_.deserialize(json.loads(file.read()))
         except IOError:
             QMessageBox.warning(self, "Error", "Automata save failed")
         except (json.JSONDecodeError, TypeError):
@@ -561,6 +560,9 @@ class AutomataGraphView(QGraphicsView):
         automata.reset_input_order(sorted(automata.input_alphabet))
         automata.reset_output_order(sorted(automata.output_alphabet))
         return automata
+
+    def is_empty(self):
+        return len(self.scene_.items()) == 0
 
     def clear_scene(self) -> None:
         self.scene().clear()
