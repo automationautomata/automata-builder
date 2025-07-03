@@ -15,8 +15,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from automata import Automata
-from tab.components import *  # noqa: F403
+from ..automata import Automata
+from ..tab.components import *
 
 
 class AutomataTabWidget(QWidget):
@@ -77,6 +77,8 @@ class AutomataTabWidget(QWidget):
             automata.initial_state,
         )
         QMessageBox.information(self, "Notification", "Automata is correct")
+        if not self.is_panel_hidden():
+            self.hide_panel()
 
     def draw_click(self) -> None:
         automata = self.automata_container.automata()

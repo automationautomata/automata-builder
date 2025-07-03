@@ -2,7 +2,7 @@ import json
 import os
 from os.path import join
 
-from data import STYLESHEETS_DIR
+from ..data import STYLESHEETS_DIR
 
 
 def load_stylesheet(filename: str):
@@ -10,8 +10,8 @@ def load_stylesheet(filename: str):
         filename = f"{filename}.qss"
 
     path = join(STYLESHEETS_DIR, filename)
-    with open(path, "r", encoding='utf-8',) as stylesheet_file:
-        return stylesheet_file.read()
+    with open(path, "r", encoding="utf-8") as file:
+        return file.read()
 
 
 def load_stylesheets():

@@ -66,10 +66,14 @@ class Automata:
         if len(self.states ^ transitions.keys()) != 0:
             raise ValueError()
 
-        for _, t in transitions.items():
-            diff = self.input_alphabet_.keys() ^ t.keys()
-            if len(diff) != 0:
+        for _, state_tranistions in transitions.items():
+            if len(self.input_alphabet_ ^ state_tranistions.keys()) == 0:
                 raise ValueError()
+            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
+            if len(empty_tranistions) != 0:
+                raise ValueError()
+
+        self.transitions = copy.deepcopy(transitions)
 
     @property
     def output_function(self) -> Table:
@@ -80,10 +84,13 @@ class Automata:
         if len(self.states ^ output_function.keys()) != 0:
             raise ValueError()
 
-        for _, t in output_function.items():
-            diff = self.input_alphabet_.keys() ^ t.keys()
-            if len(diff) != 0:
+        for _, state_tranistions in output_function.items():
+            if len(self.input_alphabet_ ^ state_tranistions.keys()) == 0:
                 raise ValueError()
+            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
+            if len(empty_tranistions) != 0:
+                raise ValueError()
+        self.output_function = copy.deepcopy(output_function)
 
     def reset_input_order(self, ordered: list[str]) -> None:
         if len(ordered) != len(self.input_alphabet_):
@@ -106,7 +113,7 @@ class Automata:
 
     def add_input(self, symbol: str) -> None:
         if symbol in self.input_alphabet_:
-            return 
+            return
         self.input_alphabet_[symbol] = len(self.input_alphabet_) + 1
         for state in self.transitions_.keys():
             self.transitions_[state][symbol] = ""
@@ -147,7 +154,7 @@ class Automata:
         return output
 
     def read(self, word: str) -> str:
-        """Safe read with input word check"""
+        """Read with input word check"""
         if set(self.input_alphabet_.keys()).issubset(word):
             raise ValueError(
                 "The input word contains symbols not from the input alphabet"
@@ -160,7 +167,7 @@ class Automata:
     def to_number(self, word: str) -> tuple[float, float]:
         n = len(self.input_alphabet_)
         number = sum(
-            self.input_alphabet_[word[i]] / n**i for i in range(1, len(word) + 1)
+            self.input_alphabet_[word[i - 1]] / n**i for i in range(1, len(word) + 1)
         )
         return number
 
@@ -182,14 +189,14 @@ class Automata:
             empty_tranistions = [k for k, v in state_tranistions.items() if not v]
             if len(empty_tranistions) != 0:
                 errors.append(
-                    f"State {state} must have transition for {empty_tranistions} input symbols"
+                    f"State {state} must have transition for {', '.join(empty_tranistions)} input symbols"
                 )
 
         for state, state_tranistions in self.output_function_.items():
             empty_tranistions = [k for k, v in state_tranistions.items() if not v]
             if len(empty_tranistions) != 0:
                 errors.append(
-                    f"State {state} must have output for {empty_tranistions} input alphabet"
+                    f"State {state} must have output for {', '.join(empty_tranistions)} input alphabet"
                 )
 
         return errors

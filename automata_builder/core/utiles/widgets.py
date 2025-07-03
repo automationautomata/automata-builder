@@ -1,27 +1,10 @@
-from typing import Callable
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
-from PyQt6.QtWidgets import (
-    QApplication,
-    QDialog,
-    QGraphicsTextItem,
-    QGridLayout,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-    QTableWidget,
-    QTableWidgetItem,
-    QHeaderView,
-)
+from PyQt6.QtWidgets import *
 
-from lang import getlocale
+from ..lang import getlocale
 
 
 class MultipleInputDialog(QDialog):
@@ -182,15 +165,15 @@ class VerticalMessagesWidget(QListWidget):
             raise ValueError(
                 "The message position must be less than the number of messages"
             )
-        
+
         message_item = self.item(message_pos)
         if not message_item:
             return
-        
+
         message = self.itemWidget(message_item)
         if not message:
             return
-        
+
         self.removeItemWidget(message_item)
         message.deleteLater()
 

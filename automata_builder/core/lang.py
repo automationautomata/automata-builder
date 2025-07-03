@@ -3,7 +3,7 @@ from os.path import join
 
 import yaml
 
-from data import BASE_LANG, LOCALE_DIR
+from .data import BASE_LANG, LOCALE_DIR
 
 
 def load_locales(path):

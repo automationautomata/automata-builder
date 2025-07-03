@@ -2,34 +2,15 @@ import json
 import os
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import (
-    QAction,
-    QBrush,
-    QColor,
-    QKeyEvent,
-    QMouseEvent,
-    QPainter,
-    QWheelEvent,
-)
+from PyQt6.QtGui import *
 from PyQt6.QtSvg import QSvgGenerator
-from PyQt6.QtWidgets import (
-    QFileDialog,
-    QGraphicsScene,
-    QGraphicsSceneContextMenuEvent,
-    QGraphicsSceneMouseEvent,
-    QGraphicsView,
-    QHBoxLayout,
-    QMenu,
-    QMessageBox,
-    QPushButton,
-    QWidget,
-)
+from PyQt6.QtWidgets import *
 
-from automata import Automata
-from data import SAVES_DIR, VIEW_FILE_NAME
-from graphics.items import Edge, Node
-from utiles import json_to_file
-from widgets import (
+from ..automata import Automata
+from ..data import AUTOMATA_EXT, SAVES_DIR, VIEW_FILE_NAME
+from ..graphics.items import Edge, Node
+from ..utiles import utiles
+from ..utiles.widgets import (
     OverlayWidget,
     TableInputDialog,
     VerticalInputDialog,
@@ -113,6 +94,7 @@ class EdgeEditDialog(TableInputDialog):
 
 class AutomataDrawingScene(QGraphicsScene):
     INITIAL_STATE_COLOR = QColor(128, 25, 90, 180)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
@@ -171,11 +153,8 @@ class AutomataDrawingScene(QGraphicsScene):
         elif isinstance(item, Edge):
             menu.addActions(self.edge_actions(item))
 
-        # Отображаем меню в позиции курсора
-        action = menu.exec(event.screenPos())
-        # Можно проверить выбранное действие
-        if action:
-            print(f"Выбрано действие: {action.text()}")
+        # Menu at cursor position
+        menu.exec(event.screenPos())
 
     def node_actions(self, node: Node) -> list[QAction]:
         def edit_node():
@@ -485,14 +464,26 @@ class AutomataGraphView(QGraphicsView):
     def unmark_node(self, node_name: str) -> None:
         self.scene_.unmark_node(node_name)
 
+    def mark_all(self, color: QColor) -> None:
+        for node in self.scene_.nodes:
+            self.scene_.mark_node(node, color)
+
+    def unmark_all(self) -> None:
+        marked_nodes = self.scene_.marked_nodes.copy()
+        for node in marked_nodes:
+            self.scene_.unmark_node(node)
+
     def save_view(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл", SAVES_DIR, f"Все файлы ({VIEW_FILE_NAME}.json)"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Сохранить файл",
+            SAVES_DIR,
+            f"Файлы ({VIEW_FILE_NAME}.{AUTOMATA_EXT})",
         )
         if not file_path:
             return
 
-        if json_to_file(self.scene_.serialize(), SAVES_DIR, VIEW_FILE_NAME):
+        if utiles.json_to_file(self.scene_.serialize(), SAVES_DIR, VIEW_FILE_NAME):
             QMessageBox.information(self, "Notification", "saved")
             return
 
@@ -500,9 +491,8 @@ class AutomataGraphView(QGraphicsView):
 
     def load_view(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл", SAVES_DIR, "Все файлы (*.*)"
+            self, "Выберите файл", SAVES_DIR, f"Файлы (*.{AUTOMATA_EXT})"
         )
-
         if not file_path:
             return
 

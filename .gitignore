@@ -1,7 +1,10 @@
 .venv/
 .vscode/
 __pycache__
+saves
+.ruff_cache
+dist
+build
+automata_viewer.egg-info
 tmp.py
 tasks.md
-saves/**
-.ruff_cache

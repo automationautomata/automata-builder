@@ -3,25 +3,11 @@ import math
 from typing import Any
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import (
-    QBrush,
-    QFont,
-    QPainterPath,
-    QPainterPathStroker,
-    QPen,
-    QPolygonF,
-    QVector2D,
-)
-from PyQt6.QtWidgets import (
-    QGraphicsEllipseItem,
-    QGraphicsItem,
-    QGraphicsPathItem,
-    QGraphicsPolygonItem,
-    QGraphicsSceneMouseEvent,
-    QGraphicsTextItem,
-)
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
-from widgets import EditableTextItem
+
+from ..utiles.widgets import EditableTextItem
 
 
 class Node(QGraphicsEllipseItem):
@@ -429,8 +415,8 @@ class Edge(QGraphicsPathItem):
             "transitions": self.transitions,  # первый ключ или по необходимости
             "source": self.source.name,
             "destination": self.destination.name,
-            "bend_ratio": self.bend_ratio, 
-            "bend_offset": self.bend_offset
+            "bend_ratio": self.bend_ratio,
+            "bend_offset": self.bend_offset,
         }
 
     @staticmethod

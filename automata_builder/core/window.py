@@ -3,21 +3,12 @@ import os
 from datetime import datetime
 
 from PyQt6.QtGui import QCloseEvent
-from PyQt6.QtWidgets import (
-    QHBoxLayout,
-    QMessageBox,
-    QPushButton,
-    QTabWidget,
-    QVBoxLayout,
-    QWidget,
-    QSizePolicy,
-    QFileDialog,
-)
+from PyQt6.QtWidgets import *
 
-import lang
-import utiles
-from data import SAVES_DIR, SESSION_EXT, SESSIONS_DIR
-from tab.tab import AutomataTabWidget
+from . import lang
+from .data import SESSION_EXT, SESSIONS_DIR
+from .tab.tab import AutomataTabWidget
+from .utiles import utiles
 
 
 class MainWindow(QWidget):
@@ -27,11 +18,9 @@ class MainWindow(QWidget):
         self.setWindowTitle("QTabWidget с QGraphicsView")
         self.resize(850, 720)
 
-        
         self.tab_widget = QTabWidget(self)
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
-        
 
         self.btn_add = QPushButton("Add AutomataGraphView")
         self.btn_add.clicked.connect(self.add_graph_view)
@@ -47,7 +36,7 @@ class MainWindow(QWidget):
         button_layout.addWidget(self.btn_add)
         button_layout.addWidget(self.btn_switch)
         button_layout.addWidget(self.btn_load)
-        
+
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tab_widget)
         main_layout.addLayout(button_layout)
@@ -57,7 +46,7 @@ class MainWindow(QWidget):
 
         if not self.load_last_session():
             self.add_graph_view()
-    
+
     def add_graph_view(self):
         tab_content = AutomataTabWidget()
 
@@ -89,8 +78,8 @@ class MainWindow(QWidget):
             if reply == QMessageBox.StandardButton.Yes:
                 view.save_view()
         self.tabs.pop(index)
-        self.tab_widget.removeTab(index) 
-        
+        self.tab_widget.removeTab(index)
+
     def save_session(self) -> bool:
         if all(tab.is_empty() for tab in self.tabs):
             return True
@@ -125,7 +114,7 @@ class MainWindow(QWidget):
 
     def load_last_session(self) -> bool:
         if not os.path.exists(SESSIONS_DIR):
-            os.mkdir(SESSIONS_DIR)
+            os.makedirs(SESSIONS_DIR, exist_ok=True)
 
         sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(SESSION_EXT)]
         if len(sessions) == 0:

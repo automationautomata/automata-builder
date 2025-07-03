@@ -1,35 +1,14 @@
 import enum
 from typing import Callable
 
-from PyQt6.QtCore import (
-    QAbstractAnimation,
-    QEasingCurve,
-    QPoint,
-    QPropertyAnimation,
-    QRectF,
-    QSequentialAnimationGroup,
-    Qt,
-)
+from ..automata import Automata
+from ..graphics.view import AutomataGraphView
+from PyQt6.QtCore import *
 from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
-from PyQt6.QtWidgets import (
-    QGraphicsOpacityEffect,
-    QHBoxLayout,
-    QLabel,
-    QLineEdit,
-    QMenu,
-    QMessageBox,
-    QPushButton,
-    QSizePolicy,
-    QStackedLayout,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt6.QtWidgets import *
 
-from automata import Automata
-from graphics.view import AutomataGraphView
-from tab.components import *  # noqa: F403
-from widgets import OverlayWidget, PlotWidget, VerticalMessagesWidget
+from ..tab.components import *
+from ..utiles.widgets import OverlayWidget, PlotWidget, VerticalMessagesWidget
 
 
 class AlphabetEdit(QTextEdit):
@@ -89,7 +68,14 @@ class AlphabetEdit(QTextEdit):
 
     def alphabet(self) -> list[str]:
         text = self.toPlainText()
-        return text[2:-2].split(", ") if text else []
+        alphabet = text[2:-2].split(", ")
+        return alphabet if alphabet[0] else []
+
+    def set_alphabet(self, alphabet: list[str]) -> None:
+        text = "{" + ", ".join(alphabet) + "}"
+        self.blockSignals(True)
+        self.setText(text)
+        self.blockSignals(False)
 
 
 class AutomataDataWidget(QWidget):
@@ -160,8 +146,8 @@ class AutomataDataWidget(QWidget):
     def set_data(
         self, input_alphabet: list[str], output_alphabet: list[str], initial_state: str
     ) -> None:
-        self.input_alphabet_field.setText("{" + ", ".join(input_alphabet) + "}")
-        self.output_alphabet_field.setText("{" + ", ".join(output_alphabet) + "}")
+        self.input_alphabet_field.set_alphabet(input_alphabet)
+        self.output_alphabet_field.set_alphabet(output_alphabet)
         self.initial_state_field.setText(initial_state)
 
     def is_empty(self):
@@ -284,7 +270,7 @@ class SidePanel(QWidget):
         self.set_mode(self.Mode.EMPTY)
 
 
-class AutomataWordInput(QWidget):
+class AutomataWordProcessing(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -316,9 +302,16 @@ class AutomataWordInput(QWidget):
         buttons_layout.addWidget(self.backword_button)
         buttons_layout.addWidget(self.forward_button)
 
+        self.clear_button = QPushButton(text="clear")
+
+        processing_layout = QVBoxLayout()
+        processing_layout.setContentsMargins(0, 0, 0, 0)
+        processing_layout.addLayout(buttons_layout)
+        processing_layout.addWidget(self.clear_button)
+
         main_layout = QHBoxLayout()
         main_layout.addLayout(layout)
-        main_layout.addLayout(buttons_layout)
+        main_layout.addLayout(processing_layout)
         main_layout.setAlignment(buttons_layout, Qt.AlignmentFlag.AlignTop)
 
         self.setLayout(main_layout)
@@ -404,19 +397,20 @@ class AutomataContainer(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
 
-        self.word_input = AutomataWordInput()
-        self.word_input.setMinimumHeight(self.height() // 6)
-        self.word_input.setMaximumWidth(self.width())
-        self.word_input.setSizePolicy(
+        self.word_processing = AutomataWordProcessing()
+        self.word_processing.setMinimumHeight(self.height() // 6)
+        self.word_processing.setMaximumWidth(self.width())
+        self.word_processing.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self.word_input.input_word_edit.textChanged.connect(self.filter_input)
-        self.word_input.forward_button.clicked.connect(self.forward_click)
-        self.word_input.backword_button.clicked.connect(self.backward_click)
+        self.word_processing.input_word_edit.textChanged.connect(self.filter_input)
+        self.word_processing.forward_button.clicked.connect(self.forward_click)
+        self.word_processing.backword_button.clicked.connect(self.backward_click)
+        self.word_processing.clear_button.clicked.connect(self.backward_click)
 
         layout = QVBoxLayout()
         layout.addWidget(self.view)
-        layout.addWidget(self.word_input, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self.word_processing, 0, Qt.AlignmentFlag.AlignTop)
         self.setLayout(layout)
 
         # --------------------------------------
@@ -424,7 +418,7 @@ class AutomataContainer(QWidget):
         self.tact_counter.setHidden(True)
         # --------------------------------------
 
-        self.prev_input_word = self.word_input.input_word
+        self.prev_input_word = self.word_processing.input_word
         self.transitions_history = []
         self.automata_check = None
 
@@ -458,59 +452,62 @@ class AutomataContainer(QWidget):
         return self.view.to_automata()
 
     def filter_input(self) -> None:
-        word = self.word_input.input_word
+        word = self.word_processing.input_word
         input_alphabet = self.automata().input_alphabet
         if all(s in input_alphabet for s in word):
             self.prev_input_word = word
             return
-        self.word_input.blockSignals(True)
-        self.word_input.input_word = self.prev_input_word
-        self.word_input.blockSignals(False)
+        self.word_processing.blockSignals(True)
+        self.word_processing.input_word = self.prev_input_word
+        self.word_processing.blockSignals(False)
         QMessageBox.warning(self, "Error", "Invalid input symbol")
 
     def forward_click(self) -> None:
-        if not (self.word_input.input_word and self.automata_check):
+        if not (self.word_processing.input_word and self.automata_check):
             return
 
         automata = self.automata()
         if not self.automata_check(automata):
             return
 
-        n = len(self.word_input.output_word)
-        if n == len(self.word_input.input_word):
+        input_word = self.word_processing.input_word
+        output_word = self.word_processing.output_word
+        # > - in case the input_word last symbols was removed
+        if len(output_word) >= len(input_word):
             return
 
+        n = len(output_word)
         if n == 0:
             self.transitions_history.clear()
             self.transitions_history.append(automata.initial_state)
 
         cur_state = self.transitions_history[-1]
-        cur_symb = self.word_input.input_word[n]
+        cur_symb = input_word[n]
         new_state, out_ = automata.transition(cur_symb, cur_state)
 
         self.view.unmark_node(cur_state)
         self.view.mark_node(new_state, self.MARKED_NODE_COLOR)
 
-        self.word_input.append_to_output(out_)
+        self.word_processing.append_to_output(out_)
         self.transitions_history.append(new_state)
 
         if self.tact_counter.isHidden():
-            # if tact_counter was closed
+            # if tact_counter was closed, while word was processing
             self.tact_counter.setVisible(True)
             self.tact_counter.value = n + 1
         else:
             self.tact_counter.increnemt()
 
     def backward_click(self) -> None:
-        if not (self.word_input.input_word and self.automata_check):
+        if not (self.word_processing.input_word and self.automata_check):
             return
 
         if len(self.transitions_history) == 0:
             return
 
         # Reduce on 1 symbol output word
-        output_word = self.word_input.output_word
-        self.word_input.output_word = output_word[:-1]
+        output_word = self.word_processing.output_word
+        self.word_processing.output_word = output_word[:-1]
 
         # Mark previous state
         state = self.transitions_history.pop()
@@ -520,11 +517,16 @@ class AutomataContainer(QWidget):
             self.view.mark_node(prev_state, self.MARKED_NODE_COLOR)
 
         if self.tact_counter.isHidden():
-            # if tact_counter was closed
+            # if tact_counter was closed, while word was processing
             self.tact_counter.setVisible(True)
-            self.tact_counter.value = len(self.word_input.output_word)
+            self.tact_counter.value = len(self.word_processing.output_word)
         else:
             self.tact_counter.decrement()
+
+    def clear_click(self):
+        self.word_processing.input_word = ""
+        self.word_processing.output_word = ""
+        self.transitions_history.clear()
 
     def is_empty_scene(self):
         return self.view.is_empty()
