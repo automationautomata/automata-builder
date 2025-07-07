@@ -1,14 +1,16 @@
 import enum
 from typing import Callable
 
-from ..automata import Automata
-from ..graphics.view import AutomataGraphView
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
+from matplotlib.figure import Figure
 from PyQt6.QtCore import *
 from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
 from PyQt6.QtWidgets import *
 
+from ..automata import Automata
+from ..graphics.view import AutomataGraphView
 from ..tab.components import *
-from ..utiles.widgets import OverlayWidget, PlotWidget, VerticalMessagesWidget
+from ..utiles.widgets import OverlayWidget, VerticalMessagesWidget
 
 
 class AlphabetEdit(QTextEdit):
@@ -152,6 +154,27 @@ class AutomataDataWidget(QWidget):
 
     def is_empty(self):
         return self.input_alphabet() or self.output_alphabet() or self.initial_state()
+
+
+class PlotWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        fig = Figure(figsize=(5, 5))
+        self.canvas = FigureCanvasQTAgg(fig)
+        self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.ax = self.canvas.figure.add_subplot(111)
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)
+        self.setLayout(layout)
+
+    def draw(self, x: list[int], y: list[int], title: str = "") -> None:
+        self.ax.cla()
+        self.ax.set_title(title)
+        self.ax.scatter(x, y)
+        self.ax.grid(True)
+        self.canvas.draw()
 
 
 class SidePanel(QWidget):
@@ -381,7 +404,7 @@ class TactCounter(OverlayWidget):
 
 
 class AutomataContainer(QWidget):
-    MARKED_NODE_COLOR = QColor(128, 0, 0)
+    MARKED_COLOR = QColor(128, 0, 0)
 
     def __init__(
         self,
@@ -486,7 +509,7 @@ class AutomataContainer(QWidget):
         new_state, out_ = automata.transition(cur_symb, cur_state)
 
         self.view.unmark_node(cur_state)
-        self.view.mark_node(new_state, self.MARKED_NODE_COLOR)
+        self.view.mark_node(new_state, self.MARKED_COLOR)
 
         self.word_processing.append_to_output(out_)
         self.transitions_history.append(new_state)
@@ -514,7 +537,7 @@ class AutomataContainer(QWidget):
         self.view.unmark_node(state)
         if len(self.transitions_history) != 0:
             prev_state = self.transitions_history[-1]
-            self.view.mark_node(prev_state, self.MARKED_NODE_COLOR)
+            self.view.mark_node(prev_state, self.MARKED_COLOR)
 
         if self.tact_counter.isHidden():
             # if tact_counter was closed, while word was processing

@@ -1,5 +1,3 @@
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import *
@@ -115,7 +113,7 @@ class TableInputDialog(MultipleInputDialog):
 
 
 class EditableTextItem(QGraphicsTextItem):
-    def __init__(self, text: str = "", parent: QWidget | None = None):
+    def __init__(self, text: str = "", parent: QGraphicsItem | None = None) -> None:
         super().__init__(text, parent)
         self.setAcceptHoverEvents(True)
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
@@ -186,27 +184,8 @@ class VerticalMessagesWidget(QListWidget):
             self.remove_message(self.count() - 1)
 
 
-class PlotWidget(QWidget):
-    def __init__(self, parent: QWidget | None = None):
-        super().__init__(parent)
-        self.figure = Figure()
-        self.canvas = FigureCanvas(self.figure)
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.canvas)
-        self.setLayout(layout)
-
-    def draw(
-        self, x: list[int], y: list[int], title: str = "Embedded Matplotlib Plot"
-    ) -> None:
-        ax = self.figure.add_subplot(1, 1, 1)
-        ax.plot(x, y)
-        ax.set_title(title)
-        self.canvas.draw()
-
-
 class OverlayWidget(QWidget):
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
@@ -220,7 +199,7 @@ class TableWidget(QTableWidget):
         column_names: list[str] | None = None,
         row_names: list[str] | None = None,
         parent: QWidget | None = None,
-    ):
+    ) -> None:
         super().__init__(parent)
         for i, row in enumerate(data):
             for j, item in enumerate(row):

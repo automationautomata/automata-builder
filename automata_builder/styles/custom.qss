@@ -1,6 +1,6 @@
 QTabBar::close-button {
     /* Используйте иконку или задайте цвет */
-    image: url(":/images/close.svg");
+    image: url("images/close.svg");
     border-radius: 8px;
 }
 

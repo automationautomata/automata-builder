@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import *
@@ -49,7 +50,6 @@ class MainWindow(QWidget):
 
     def add_graph_view(self):
         tab_content = AutomataTabWidget()
-
         tab_name = f"View {self.tab_widget.count() + 1}"
         self.tab_widget.addTab(tab_content, tab_name)
 
@@ -80,6 +80,16 @@ class MainWindow(QWidget):
         self.tabs.pop(index)
         self.tab_widget.removeTab(index)
 
+    def save_current_session(self):
+        session_data = []
+        for tab in self.tabs:
+            session_data.append(tab.dump())
+
+        fmt_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{fmt_date}.{SESSION_EXT}"
+
+        return utiles.json_to_file(session_data, SESSIONS_DIR, filename)
+
     def save_session(self) -> bool:
         if all(tab.is_empty() for tab in self.tabs):
             return True
@@ -94,13 +104,7 @@ class MainWindow(QWidget):
         if reply == QMessageBox.StandardButton.No:
             return True
 
-        session_data = []
-        for tab in self.tabs:
-            session_data.append(tab.dump())
-
-        fmt_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"{fmt_date}.{SESSION_EXT}"
-        if not utiles.json_to_file(session_data, SESSIONS_DIR, filename):
+        if not self.save_current_session():
             reply = QMessageBox.question(
                 self,
                 "Error",
@@ -108,15 +112,16 @@ class MainWindow(QWidget):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
-            if reply == QMessageBox.StandardButton.No:
-                return False
+            return reply != QMessageBox.StandardButton.No
+
         return True
 
     def load_last_session(self) -> bool:
-        if not os.path.exists(SESSIONS_DIR):
+        path = Path(SESSIONS_DIR)
+        if not path.exists():
             os.makedirs(SESSIONS_DIR, exist_ok=True)
 
-        sessions = [f for f in os.listdir(SESSIONS_DIR) if f.endswith(SESSION_EXT)]
+        sessions = [os.path.splitext(f.name) for f in path.rglob(f"*.{SESSION_EXT}")]
         if len(sessions) == 0:
             return False
 
@@ -130,19 +135,26 @@ class MainWindow(QWidget):
         if reply == QMessageBox.StandardButton.No:
             return False
 
-        last_session = sorted(os.path.splitext(s)[0] for s in sessions)[-1]
-        path = os.path.join(SESSIONS_DIR, f"{last_session}.{SESSION_EXT}")
-        self.load_session(path)
+        last_session = max(sessions, key=lambda x: x[0])
+        filepath = os.path.join(SESSIONS_DIR, "".join(last_session))
+        try:
+            self.load_session(filepath)
+        except (IOError, FileNotFoundError):
+            QMessageBox.warning(self, "Error", "Session load failed")
+        except (json.JSONDecodeError, TypeError):
+            QMessageBox.warning(self, "Error", "File incorrect format")
 
-    def choose_session(self):
-        file_path, _ = QFileDialog.getOpenFileName(
+        return True
+
+    def choose_session(self) -> bool:
+        filepath, _ = QFileDialog.getOpenFileName(
             self, "Выберите файл", SESSIONS_DIR, "Все файлы (*.*)"
         )
 
-        if not file_path:
+        if not filepath:
             return True
         try:
-            self.load_session(file_path)
+            self.load_session(filepath)
         except IOError:
             QMessageBox.warning(self, "Error", "Session load failed")
         except (json.JSONDecodeError, TypeError):

@@ -1,11 +1,16 @@
+"""Package building and installation.
+
+to verbolse output use -v flag as arg.
+"""
+
 import importlib.util
 import os
 import shutil
 import subprocess
 import sys
 
-BLUE_COLOR = "\033[34m"
 RED_COLOR = "\033[31m"
+BLUE_COLOR = "\033[34m"
 GREEN_COLOR = "\033[32m"
 RESET_COLOR = "\033[0m"
 
@@ -44,19 +49,20 @@ def install(package_name: str, verbose: bool = False):
 
     try:
         python_cmd = sys.executable
+        pip_cmd = [python_cmd, "-m", "pip", "install", "--disable-pip-version-check"]
+
         if not importlib.util.find_spec("build"):
             print("The 'build' package is not installed. Installing it now...")
-            subprocess.run([python_cmd, "-m", "pip", "install", "build"], **run_kwargs)
+            subprocess.run([*pip_cmd, "build"], **run_kwargs)
 
         # problem of using build.ProjectBuilder(".").build("wheel", "dist")
         # is output redirection (contextlib is needed)
-
         print("Building the project...")
         subprocess.run([python_cmd, "-m", "build"], **run_kwargs)
 
         print(color_text("Build completed.", GREEN_COLOR))
 
-        subprocess.run([python_cmd, "-m", "pip", "install", "-e", "."], **run_kwargs)
+        subprocess.run([*pip_cmd, "-e", "."], **run_kwargs)
         print(color_text("Installation completed.", GREEN_COLOR))
 
         print(color_text(f"To run use {package_name} command in console", BLUE_COLOR))
@@ -68,10 +74,7 @@ def install(package_name: str, verbose: bool = False):
         print()
         print(color_text("Installation can't be finished", RED_COLOR))
         print(color_text("ERROR:", RED_COLOR))
-        if isinstance(e, subprocess.CalledProcessError):
-            print(e.stderr)
-        else:
-            print(e)
+        print(e.stderr if isinstance(e, subprocess.CalledProcessError) else e)
     finally:
         print()
         print("Cleaninig build artifacts...")

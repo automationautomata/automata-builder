@@ -38,7 +38,7 @@ class AutomataTabWidget(QWidget):
         # self.side_panel.sizeHint = lambda: QSize(0, self.height() // 3)
         # self.side_panel.setHidden(True)
         self.errors_panel_width = self.width() // 3
-        self.plot_panel_width = self.width() // 3
+        self.plot_panel_width = self.height()
         side_panel_max_width = max(self.plot_panel_width, self.errors_panel_width)
         self.side_panel.setMaximumWidth(side_panel_max_width)
         self.side_panel.setMinimumWidth(0)
@@ -77,8 +77,7 @@ class AutomataTabWidget(QWidget):
             automata.initial_state,
         )
         QMessageBox.information(self, "Notification", "Automata is correct")
-        if not self.is_panel_hidden():
-            self.hide_panel()
+        self.toggle_panel()
 
     def draw_click(self) -> None:
         automata = self.automata_container.automata()
@@ -101,12 +100,15 @@ class AutomataTabWidget(QWidget):
             automata.output_alphabet,
             automata.initial_state,
         )
-        prec = 20
+        prec = 16
         x, y = [], []
-        for i in range(prec):
-            for in_word, out_word in automata.pairs_generator(i):
-                x.append(automata.to_number(in_word))
-                y.append(automata.to_number(out_word))
+        for i in range(1, prec):
+            in_words, out_words = zip(*automata.pairs_generator(i))
+            x.extend(map(automata.to_number, in_words))
+            y.extend(map(automata.to_number, out_words))
+            # for in_word, out_word in automata.pairs_generator(i):
+            #     x.append(automata.to_number(in_word))
+            #     y.append(automata.to_number(out_word))
 
         if self.side_panel.current_mode != SidePanel.Mode.PLOT:
             self.side_panel.switch_to_plot()
@@ -116,9 +118,9 @@ class AutomataTabWidget(QWidget):
             return
 
         def after_finish():
-            return self.side_panel.draw_plot(x, y)
+            self.side_panel.draw_plot(x, y)
 
-        self.show_panel(self.plot_panel_width, after_finish)
+        self.toggle_panel(self.plot_panel_width, after_finish)
 
     def close_panel_click(self) -> None:
         if self.is_panel_hidden():
@@ -131,7 +133,7 @@ class AutomataTabWidget(QWidget):
             )
             self.side_panel.setMinimumWidth(0)
 
-        self.hide_panel(after_finish=after_finish)
+        self.toggle_panel(after_finish=after_finish)
 
     def check_automata(self, automata: Automata) -> list[str]:
         input_alphabet = self.automata_data.input_alphabet()
@@ -167,39 +169,21 @@ class AutomataTabWidget(QWidget):
         return automata.detailed_verificatin()
 
     def show_errors(self, errors: list[str]) -> None:
-        if self.side_panel.current_mode == SidePanel.Mode.ERROR_MESSAGES:  # noqa: F405
+        if self.side_panel.current_mode == SidePanel.Mode.ERROR_MESSAGES:
             self.side_panel.clear_messages()
-        else:
-            self.side_panel.switch_to_messages()
-            self.side_panel.clear_messages()
-
-        if not self.is_panel_hidden():
             self.side_panel.add_messages(*errors)
             return
 
+        self.side_panel.switch_to_messages()
+        self.side_panel.clear_messages()
+
         def after_finish():
-            self.side_panel.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-            )
             self.side_panel.add_messages(*errors)
 
-        self.show_panel(self.errors_panel_width, after_finish)
-
-    def hide_panel(
-        self, dest_width: int = 0, after_finish: Callable[[], None] | None = None
-    ) -> None:
-        self.toggle_panel(False, dest_width, after_finish)
-
-    def show_panel(
-        self, dest_width: int, after_finish: Callable[[], None] | None = None
-    ) -> None:
-        self.toggle_panel(True, dest_width, after_finish)
+        self.toggle_panel(self.errors_panel_width, after_finish)
 
     def toggle_panel(
-        self,
-        flag: bool,
-        dest_width: int,
-        after_finish: Callable[[], None] | None = None,
+        self, dest_width: int = 0, after_finish: Callable[[], None] | None = None
     ) -> None:
         group = QSequentialAnimationGroup(self.parentWidget())
         duration = 200
@@ -213,26 +197,18 @@ class AutomataTabWidget(QWidget):
         dest_panel_geom = QRect(self.side_panel.geometry())
 
         dest_panel_geom.setWidth(dest_width)
-        if flag:
-            dest_panel_geom.setLeft(panel_geom.right() - dest_width)
-            dest_panel_geom.setRight(panel_geom.right())
 
-            dest_data_geom.setWidth(data_geom.width() - dest_width)
-            dest_data_geom.setLeft(data_geom.left() - dest_width)
-            dest_data_geom.setRight(data_geom.right() - dest_width)
+        width_diff = dest_width - panel_geom.width()
 
-            dest_auto_geom.setWidth(auto_geom.width() - dest_width)
-            dest_auto_geom.setRight(auto_geom.right() - dest_width)
-        else:
-            dest_panel_geom.setLeft(panel_geom.right())
-            dest_panel_geom.setRight(panel_geom.right())
+        dest_panel_geom.setLeft(panel_geom.left() - width_diff)
+        dest_panel_geom.setRight(panel_geom.right())
 
-            dest_data_geom.setWidth(data_geom.width() + panel_geom.width())
-            dest_data_geom.setLeft(data_geom.left() + panel_geom.width())
-            dest_data_geom.setRight(data_geom.right() + panel_geom.width())
+        dest_data_geom.setWidth(data_geom.width() - width_diff)
+        dest_data_geom.setLeft(data_geom.left() - width_diff)
+        dest_data_geom.setRight(data_geom.right() - width_diff)
 
-            dest_auto_geom.setWidth(auto_geom.width() + panel_geom.width())
-            dest_auto_geom.setRight(auto_geom.right() + panel_geom.width())
+        dest_auto_geom.setWidth(auto_geom.width() - width_diff)
+        dest_auto_geom.setRight(auto_geom.right() - width_diff)
 
         auto_anim = QPropertyAnimation(self.automata_container, b"geometry", self)
         auto_anim.setDuration(duration // 8)
@@ -252,7 +228,7 @@ class AutomataTabWidget(QWidget):
         panel_anim.setEndValue(dest_panel_geom)
         panel_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
-        if flag:
+        if width_diff > 0:
             group.addAnimation(auto_anim)
             group.addPause(20)
             group.addAnimation(data_anim)
@@ -265,8 +241,16 @@ class AutomataTabWidget(QWidget):
             group.addPause(20)
             group.addAnimation(auto_anim)
 
-        if after_finish:
-            group.finished.connect(after_finish)
+        def on_finish():
+            self.side_panel.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
+            if width_diff > 0:
+                self.side_panel.setMaximumWidth(dest_width)
+            if after_finish:
+                after_finish()
+
+        group.finished.connect(on_finish)
 
         group.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 

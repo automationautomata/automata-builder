@@ -2,19 +2,21 @@ from os.path import dirname, join
 
 import userpaths
 
-BASE_DIR = dirname(dirname(__file__))
+BASE_LANG = "en"
 
-SAVES_DIR = join(userpaths.get_my_documents(), "automata_viewer")
+BASE_DIR = dirname(dirname(__file__))
 
 LOCALE_DIR = join(BASE_DIR, "locale")
 
-SESSIONS_DIR = join(SAVES_DIR, "sessions")
-
 STYLESHEETS_DIR = join(BASE_DIR, "styles")
 
-VIEW_FILE_NAME = "automata"
+RESOURCES_DIRS = (join(BASE_DIR, "images"),)
 
-BASE_LANG = "en"
+DATA_DIR = join(userpaths.get_my_documents(), "automata builder")
+
+SESSIONS_DIR = join(DATA_DIR, "sessions")
+
+VIEW_FILE_NAME = "automata"
 
 SESSION_EXT = "session"
 

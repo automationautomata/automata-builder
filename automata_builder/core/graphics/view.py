@@ -7,7 +7,7 @@ from PyQt6.QtSvg import QSvgGenerator
 from PyQt6.QtWidgets import *
 
 from ..automata import Automata
-from ..data import AUTOMATA_EXT, SAVES_DIR, VIEW_FILE_NAME
+from ..data import AUTOMATA_EXT, DATA_DIR, VIEW_FILE_NAME
 from ..graphics.items import Edge, Node
 from ..utiles import utiles
 from ..utiles.widgets import (
@@ -184,10 +184,14 @@ class AutomataDrawingScene(QGraphicsScene):
         edit_action = QAction("Редактировать", self)
         edit_action.triggered.connect(edit_node)
 
-        make_initial_action = QAction("Сделать начальным", self)
-        make_initial_action.triggered.connect(lambda: self.set_initial_node(node))
+        if self.initial_state is node:
+            initial_action = QAction("Сделать обычным", self)
+            initial_action.triggered.connect(lambda: self.unset_initial_node(node))
+        else:
+            initial_action = QAction("Сделать начальным", self)
+            initial_action.triggered.connect(lambda: self.set_initial_node(node))
 
-        actions = [delete_action, edit_action, make_initial_action]
+        actions = [delete_action, edit_action, initial_action]
 
         if len(selected_nodes) == 0 or len(selected_nodes) == 1:
             if not node.has_loop():
@@ -293,9 +297,14 @@ class AutomataDrawingScene(QGraphicsScene):
 
     def set_initial_node(self, node: Node) -> Node:
         if self.initial_state:
-            self.initial_state.setBrush(QBrush(node.NODE_COLOR))
+            self.initial_state.setBrush(QBrush(node.COLOR))
         self.initial_state = node
         node.setBrush(self.INITIAL_STATE_COLOR)
+
+    def unset_initial_node(self, node: Node) -> Node:
+        if self.initial_state:
+            self.initial_state.setBrush(QBrush(node.COLOR))
+        self.initial_state = None
 
     @staticmethod
     def enter_edge() -> list[str]:
@@ -324,7 +333,7 @@ class AutomataDrawingScene(QGraphicsScene):
         node = self.nodes[node_name]
         brush = node.brush()
         if node is not self.initial_state:
-            brush.setColor(node.NODE_COLOR)
+            brush.setColor(node.COLOR)
         else:
             brush.setColor(self.INITIAL_STATE_COLOR)
         node.setBrush(brush)
@@ -343,14 +352,14 @@ class AutomataDrawingScene(QGraphicsScene):
         }
 
     def deserialize(self, data: dict) -> None:
-        # Восстановить узлы по именам
+        # Восстановливаем узлы по именам
         self.nodes = {}
         for node_data in data["nodes"]:
             node = Node.deserialize(node_data)
             self.nodes[node.name] = node
             self.addItem(node)
 
-        # Восстановить ребра
+        # Восстановливаем ребра
         self.edges = []
         for edge_data in data["edges"]:
             edge = Edge.deserialize(edge_data, self.nodes)
@@ -391,7 +400,7 @@ class AutomataGraphView(QGraphicsView):
 
         self.svg_export_button = QPushButton("Export to svg")
         self.svg_export_button.setMinimumSize(button_size, button_size // 2)
-        self.svg_export_button.clicked.connect(self.save_as_svg)
+        self.svg_export_button.clicked.connect(self.save_svg)
 
         buttons_layout = QHBoxLayout()
         buttons_layout.addWidget(self.load_button)
@@ -477,13 +486,13 @@ class AutomataGraphView(QGraphicsView):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Сохранить файл",
-            SAVES_DIR,
+            DATA_DIR,
             f"Файлы ({VIEW_FILE_NAME}.{AUTOMATA_EXT})",
         )
         if not file_path:
             return
 
-        if utiles.json_to_file(self.scene_.serialize(), SAVES_DIR, VIEW_FILE_NAME):
+        if utiles.json_to_file(self.scene_.serialize(), DATA_DIR, VIEW_FILE_NAME):
             QMessageBox.information(self, "Notification", "saved")
             return
 
@@ -491,7 +500,7 @@ class AutomataGraphView(QGraphicsView):
 
     def load_view(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл", SAVES_DIR, f"Файлы (*.{AUTOMATA_EXT})"
+            self, "Выберите файл", DATA_DIR, f"Файлы (*.{AUTOMATA_EXT})"
         )
         if not file_path:
             return
@@ -507,8 +516,8 @@ class AutomataGraphView(QGraphicsView):
         else:
             QMessageBox.information(self, "Notification", "loaded")
 
-    def save_as_svg(self, filename: str) -> None:
-        start_path = os.path.join(SAVES_DIR, VIEW_FILE_NAME)
+    def save_svg(self) -> None:
+        start_path = os.path.join(DATA_DIR, VIEW_FILE_NAME)
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save File",
@@ -518,17 +527,31 @@ class AutomataGraphView(QGraphicsView):
         if not file_path:
             return
         try:
+            selected = self.scene_.selectedItems()
+            self.scene_.clearSelection()
+
             scene_rect = self.scene_.itemsBoundingRect()
+            # if scene_rect.isEmpty():
+            #     scene_rect = self.scene_.sceneRect()
 
             generator = QSvgGenerator()
-            generator.setFileName(filename)
-            generator.setSize(scene_rect.size().toSize())
+            generator.setFileName(file_path)
+            generator.setSize(self.scene_.sceneRect().size().toSize())
             generator.setViewBox(scene_rect)
 
             painter = QPainter()
             painter.begin(generator)
-            self.scene_.render(painter)
+            painter.setFont(Node.FONT)
+            self.scene_.render(
+                painter,
+                self.scene_.itemsBoundingRect(),
+                self.scene_.itemsBoundingRect(),
+                mode=Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            )
             painter.end()
+
+            for item in selected:
+                item.setSelected(True)
         except IOError:
             QMessageBox.warning(self, "Error", "Automata save failed")
 

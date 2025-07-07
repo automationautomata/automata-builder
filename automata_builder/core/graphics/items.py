@@ -11,7 +11,8 @@ from ..utiles.widgets import EditableTextItem
 
 
 class Node(QGraphicsEllipseItem):
-    NODE_COLOR = Qt.GlobalColor.cyan
+    COLOR = Qt.GlobalColor.cyan
+    FONT = QFont("Arial", 11)
 
     def __init__(
         self, name: str, x: int | float, y: int | float, radius: int | float = 20
@@ -21,7 +22,7 @@ class Node(QGraphicsEllipseItem):
         self.in_edges: dict[str, Edge] = {}  # ребра, входящие в узел
         self.out_edges: dict[str, Edge] = {}  # ребра, исходящие из узла
 
-        self.setBrush(QBrush(self.NODE_COLOR))
+        self.setBrush(QBrush(self.COLOR))
         self.setPen(QPen(Qt.GlobalColor.black))
         self.setFlag(
             QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable
@@ -31,7 +32,7 @@ class Node(QGraphicsEllipseItem):
         self.setPos(x, y)
 
         self.name_text_item = EditableTextItem(self.name_, self)
-        self.name_text_item.setFont(QFont("Arial", 11))
+        self.name_text_item.setFont(self.FONT)
         self.name_text_item.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.name_text_item.setFlag(
             QGraphicsTextItem.GraphicsItemFlag.ItemIsFocusable, False
@@ -402,10 +403,6 @@ class Edge(QGraphicsPathItem):
         arrow_item = QGraphicsPolygonItem(arrow_polygon, self)
         arrow_item.setBrush(Qt.GlobalColor.black)
         arrow_item.setPen(QPen(Qt.GlobalColor.black))
-
-        scene = self.scene()
-        if scene:
-            scene.addItem(arrow_item)
 
         # Save reference to remove later if needed
         self.arrow_head = arrow_item

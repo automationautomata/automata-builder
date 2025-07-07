@@ -1,6 +1,6 @@
 import copy
-from itertools import permutations
-from typing import Any, Generator, Sequence
+from itertools import product
+from typing import Generator, Sequence
 
 Table = dict[str, dict[str]]  # State: { Symbol: State }
 
@@ -146,12 +146,11 @@ class Automata:
 
     def __read__(self, word: str) -> str:
         """Unsafe read"""
-        output = ""
         s = self.initial_state
-        for w in word:
-            s, o = self.transition(w, s)
-            output += f"{output}{o}"
-        return output
+        output = [""] * len(word)
+        for i, w in enumerate(word):
+            s, output[i] = self.transition(w, s)
+        return "".join(output)
 
     def read(self, word: str) -> str:
         """Read with input word check"""
@@ -165,17 +164,18 @@ class Automata:
         return self.__read__(word)
 
     def to_number(self, word: str) -> tuple[float, float]:
-        n = len(self.input_alphabet_)
+        n = len(self.input_alphabet_) + 1
         number = sum(
-            self.input_alphabet_[word[i - 1]] / n**i for i in range(1, len(word) + 1)
+            self.input_alphabet_[word[-i]] / n ** (i - 1)
+            for i in range(1, len(word) + 1)
         )
         return number
 
-    def input_words(self, length: int) -> Generator[str, Any, None]:
-        for seq in permutations(self.input_alphabet_, length):
+    def input_words(self, length: int) -> Generator[str, None, None]:
+        for seq in product(self.input_alphabet_, repeat=length):
             yield "".join(seq)
 
-    def pairs_generator(self, length: int) -> Generator[tuple[str, str], Any, None]:
+    def pairs_generator(self, length: int) -> Generator[tuple[str, str], None, None]:
         for in_word in self.input_words(length):
             out_word = self.__read__(in_word)
             yield in_word, out_word
