@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import *
 
 from . import lang
 from .data import SESSION_EXT, SESSIONS_DIR
-from .tab.tab import AutomataTabWidget
+from .tab.tab import AutomataTab
 from .utiles import utiles
 
 
@@ -24,7 +24,7 @@ class MainWindow(QWidget):
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
 
         self.btn_add = QPushButton("Add AutomataGraphView")
-        self.btn_add.clicked.connect(self.add_graph_view)
+        self.btn_add.clicked.connect(self.add_view)
 
         self.btn_switch = QPushButton("Switch to Next Tab")
         self.btn_switch.clicked.connect(self.switch_to_next_tab)
@@ -43,13 +43,13 @@ class MainWindow(QWidget):
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
 
-        self.tabs: list[AutomataTabWidget] = []
+        self.tabs: list[AutomataTab] = []
 
         if not self.load_last_session():
-            self.add_graph_view()
+            self.add_view()
 
-    def add_graph_view(self):
-        tab_content = AutomataTabWidget()
+    def add_view(self):
+        tab_content = AutomataTab()
         tab_name = f"View {self.tab_widget.count() + 1}"
         self.tab_widget.addTab(tab_content, tab_name)
 
@@ -139,10 +139,14 @@ class MainWindow(QWidget):
         filepath = os.path.join(SESSIONS_DIR, "".join(last_session))
         try:
             self.load_session(filepath)
-        except (IOError, FileNotFoundError):
-            QMessageBox.warning(self, "Error", "Session load failed")
-        except (json.JSONDecodeError, TypeError):
-            QMessageBox.warning(self, "Error", "File incorrect format")
+        except (IOError, FileNotFoundError, json.JSONDecodeError, TypeError) as ex:
+            if isinstance(ex, (json.JSONDecodeError, TypeError)):
+                QMessageBox.warning(self, "Error", "File incorrect format")
+            else:
+                QMessageBox.warning(self, "Error", "Session load failed")
+            while len(self.tabs) != 0:
+                tab = self.tabs.pop()
+                tab.deleteLater()
 
         return True
 
@@ -153,22 +157,28 @@ class MainWindow(QWidget):
 
         if not filepath:
             return True
+        orig_len = len(self.tabs)
         try:
             self.load_session(filepath)
-        except IOError:
-            QMessageBox.warning(self, "Error", "Session load failed")
-        except (json.JSONDecodeError, TypeError):
-            QMessageBox.warning(self, "Error", "File incorrect format")
+        except (IOError, json.JSONDecodeError, TypeError) as ex:
+            if isinstance(ex, (json.JSONDecodeError, TypeError)):
+                QMessageBox.warning(self, "Error", "File incorrect format")
+            else:
+                QMessageBox.warning(self, "Error", "Session load failed")
+
+            while len(self.tabs) > orig_len:
+                tab = self.tabs.pop()
+                tab.deleteLater()
         else:
             QMessageBox.information(self, "Notification", "loaded")
 
         return True
 
-    def load_session(self, session_path: str):
+    def load_session(self, session_path: str) -> AutomataTab:
         with open(session_path, mode="r") as session_file:
             session_data = json.loads(session_file.read())
             for data in session_data:
-                self.add_graph_view()
+                self.add_view()
                 self.tabs[-1].load(data)
 
     def closeEvent(self, event: QCloseEvent | None):

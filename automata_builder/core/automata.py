@@ -1,6 +1,6 @@
 import copy
 from itertools import product
-from typing import Generator, Sequence
+from typing import Generator, Sequence, Union
 
 Table = dict[str, dict[str]]  # State: { Symbol: State }
 
@@ -19,184 +19,222 @@ class Automata:
         self.states = set(states) if states else set()
         self.initial_state_ = initial_state
 
-        self.input_alphabet_ = {}
+        self.inputs = {}
         if input_alphabet:
-            self.input_alphabet_.update(
-                {smb: i for i, smb in enumerate(input_alphabet, 1)}
-            )
+            self.inputs.update({smb: i for i, smb in enumerate(input_alphabet, 1)})
 
-        self.output_alphabet_ = {}
+        self.outputs = {}
         if output_alphabet:
-            self.output_alphabet_.update(
-                {smb: i for i, smb in enumerate(output_alphabet, 1)}
-            )
+            self.outputs.update({smb: i for i, smb in enumerate(output_alphabet, 1)})
 
-        self.transitions_ = {
-            s: dict.fromkeys(self.input_alphabet_, "") for s in self.states
-        }
-        self.output_function_ = {
-            s: dict.fromkeys(self.input_alphabet_, "") for s in self.states
-        }
+        self.transitions_ = {s: dict.fromkeys(self.inputs, "") for s in self.states}
+        self.output_function_ = {s: dict.fromkeys(self.inputs, "") for s in self.states}
 
     @property
     def initial_state(self) -> str:
         return self.initial_state_
 
     @initial_state.setter
-    def initial_state(self, state: str) -> bool:
+    def initial_state(self, state: str) -> None:
         if state not in self.states:
-            return False
+            raise ValueError("Initial state must be in given states")
         self.initial_state_ = state
-        return True
 
     @property
     def input_alphabet(self) -> list[str]:
-        return list(self.input_alphabet_.keys())
+        return list(self.inputs.keys())
 
     @property
     def output_alphabet(self) -> list[str]:
-        return list(self.output_alphabet_.keys())
+        return list(self.outputs.keys())
 
     @property
     def transitions(self) -> Table:
         return copy.deepcopy(self.transitions_)
 
-    @transitions.setter
-    def transitions(self, transitions: Table) -> None:
-        if len(self.states ^ transitions.keys()) != 0:
-            raise ValueError()
-
-        for _, state_tranistions in transitions.items():
-            if len(self.input_alphabet_ ^ state_tranistions.keys()) == 0:
-                raise ValueError()
-            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
-            if len(empty_tranistions) != 0:
-                raise ValueError()
-
-        self.transitions = copy.deepcopy(transitions)
-
     @property
     def output_function(self) -> Table:
         return copy.deepcopy(self.output_function_)
 
-    @output_function.setter
-    def output_function(self, output_function: Table) -> None:
-        if len(self.states ^ output_function.keys()) != 0:
+    def reset_inputs_order(self, ordered: list[str]) -> None:
+        if len(ordered) != len(self.inputs):
             raise ValueError()
+        if len(set(ordered) ^ set(self.inputs)) != 0:
+            raise ValueError()
+        self.inputs = {symb: i for i, symb in enumerate(ordered, 1)}
 
-        for _, state_tranistions in output_function.items():
-            if len(self.input_alphabet_ ^ state_tranistions.keys()) == 0:
-                raise ValueError()
-            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
-            if len(empty_tranistions) != 0:
-                raise ValueError()
-        self.output_function = copy.deepcopy(output_function)
-
-    def reset_input_order(self, ordered: list[str]) -> None:
-        if len(ordered) != len(self.input_alphabet_):
+    def reset_outputs_order(self, ordered: list[str]) -> None:
+        if len(ordered) != len(self.outputs):
             raise ValueError()
-        if len(set(ordered) ^ set(self.input_alphabet_)) != 0:
+        if set(ordered) != set(self.outputs):
             raise ValueError()
-        self.input_alphabet_ = {symb: i for i, symb in enumerate(ordered, 1)}
-
-    def reset_output_order(self, ordered: list[str]) -> None:
-        if len(ordered) != len(self.output_alphabet_):
-            raise ValueError()
-        if set(ordered) != set(self.output_alphabet_):
-            raise ValueError()
-        self.output_alphabet_ = {symb: i for i, symb in enumerate(ordered, 1)}
+        self.outputs = {symb: i for i, symb in enumerate(ordered, 1)}
 
     def add_state(self, state: str) -> None:
         self.states.add(state)
-        self.transitions_.update({state: dict.fromkeys(self.input_alphabet_, "")})
-        self.output_function_.update({state: dict.fromkeys(self.input_alphabet_, "")})
+        self.transitions_.update({state: dict.fromkeys(self.inputs, "")})
+        self.output_function_.update({state: dict.fromkeys(self.inputs, "")})
 
     def add_input(self, symbol: str) -> None:
-        if symbol in self.input_alphabet_:
+        if symbol in self.inputs:
             return
-        self.input_alphabet_[symbol] = len(self.input_alphabet_) + 1
+        self.inputs[symbol] = len(self.inputs) + 1
         for state in self.transitions_.keys():
             self.transitions_[state][symbol] = ""
             self.output_function_[state][symbol] = ""
 
     def add_output(self, symbol: str) -> None:
-        self.output_alphabet_[symbol] = self.output_alphabet_.get(
-            symbol, len(self.output_alphabet_) + 1
-        )
+        self.outputs[symbol] = self.outputs.get(symbol, len(self.outputs) + 1)
 
-    def add_transition(
-        self, input_symbol: str, input_state: str, output_state: str, output_symbol: str
+    def add_to_transitions(
+        self, input_symbol: str, input_state: str, output_state: str
     ) -> None:
-        if input_symbol not in self.input_alphabet_:
-            raise ValueError("Input symbol must be in input alphabet")
-        if input_state not in self.states:
-            raise ValueError("Input state must be in states")
-        if output_state not in self.states:
-            raise ValueError("Output state must be in states")
-        if output_symbol not in self.output_alphabet_:
-            raise ValueError("Output symbol must be in output alphabet")
+        exception = self.__check__(input_symbol, input_state, output_state)
+        if exception:
+            raise exception
 
         self.transitions_[input_state][input_symbol] = output_state
+
+    def add_to_output_function(
+        self, input_symbol: str, input_state: str, output_symbol: str
+    ) -> None:
+        exception = self.__check__(input_symbol, input_state, "", output_symbol)
+        if exception:
+            raise exception
         self.output_function_[input_state][input_symbol] = output_symbol
+
+    def __check__(
+        self,
+        input_symbol: str = "",
+        input_state: str = "",
+        output_state: str = "",
+        output_symbol: str = "",
+    ) -> Exception:
+        if input_symbol and input_symbol not in self.inputs:
+            return ValueError("Input symbol must be in input alphabet")
+        if input_state and input_state not in self.states:
+            return ValueError("Input state must be in states")
+        if output_symbol and output_symbol not in self.outputs:
+            return ValueError("Output symbol must be in output alphabet")
+        if output_state and output_state not in self.states:
+            return ValueError("Output state must be in states")
 
     def transition(self, symbol: str, state: str) -> tuple[str, str]:
         s = self.transitions_[state][symbol]
         o = self.output_function_[state][symbol]
         return s, o
 
-    def __read__(self, word: str) -> str:
-        """Unsafe read"""
-        s = self.initial_state
-        output = [""] * len(word)
+    def has_in_transitions(self, state: str, symbol: str):
+        return self.transitions_[state][symbol] != ""
+
+    def has_in_output_function(self, state: str, symbol: str):
+        return self.output_function_[state][symbol] != ""
+
+    def __read__(self, word: str) -> tuple[list[str], str]:
+        states, output = [""] * (len(word) + 1), [""] * len(word)
+        states[0] = self.initial_state
         for i, w in enumerate(word):
-            s, output[i] = self.transition(w, s)
-        return "".join(output)
+            states[i + 1], output[i] = self.transition(w, states[i])
+        return states[:-1], "".join(output)
 
     def read(self, word: str) -> str:
-        """Read with input word check"""
-        if set(self.input_alphabet_.keys()).issubset(word):
-            raise ValueError(
-                "The input word contains symbols not from the input alphabet"
-            )
-        if not self.initial_state:
-            raise ValueError("Initial state must be setted")
-
-        return self.__read__(word)
+        _, output = self.__read__(word)
+        return output
 
     def to_number(self, word: str) -> tuple[float, float]:
-        n = len(self.input_alphabet_) + 1
+        n = len(self.inputs) + 1
         number = sum(
-            self.input_alphabet_[word[-i]] / n ** (i - 1)
-            for i in range(1, len(word) + 1)
+            self.inputs[word[-i]] / n ** (i - 1) for i in range(1, len(word) + 1)
         )
         return number
 
-    def input_words(self, length: int) -> Generator[str, None, None]:
-        for seq in product(self.input_alphabet_, repeat=length):
-            yield "".join(seq)
+    def words(self, length: int, prefix: str = "") -> Generator[str, None, None]:
+        for seq in product(self.inputs, repeat=length):
+            yield f"{prefix}{''.join(seq)}"
 
-    def pairs_generator(self, length: int) -> Generator[tuple[str, str], None, None]:
-        for in_word in self.input_words(length):
-            out_word = self.__read__(in_word)
-            yield in_word, out_word
+    def pairs_generator(
+        self, length: int, input_prefix: str = "", last_state: str = ""
+    ) -> Generator[tuple[str, str], None, None]:
+        if last_state not in self.states:
+            raise ValueError("Last state must be in given states")
 
-    def detailed_verificatin(self) -> list[str]:
+        for in_word in self.words(length, input_prefix):
+            states, out_word = self.__read__(in_word)
+            if not last_state or states[-1] == last_state:
+                yield in_word, out_word
+
+    @staticmethod
+    def detailed_build(
+        initial_state: str,
+        transitions: dict[str, list[str]],
+        output_function: dict[str, list[str]],
+    ) -> tuple[Union["Automata", None], list[str]]:
+        """Builds automata and return list of errors if it's incorrect"""
+
+        states = list(set(transitions).union(set(output_function)))
+        inputs, outputs = set(), set()
+        for state_tranistions in transitions.values():
+            inputs.update(in_ for in_, _ in state_tranistions)
+
+        for state_tranistions in output_function.values():
+            # if some input not in transitions
+            ins, outs = zip(*state_tranistions)
+            inputs.update(ins)
+            outputs.update(outs)
+
+        automata = Automata(states, initial_state, sorted(inputs), sorted(outputs))
+
         errors = []
-        if not self.initial_state:
+        if not initial_state:
             errors.append("There is no initial state")
 
-        for state, state_tranistions in self.transitions_.items():
-            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
-            if len(empty_tranistions) != 0:
+        if len(transitions.keys() ^ output_function.keys()) != 0:
+            missing_states = output_function.keys() - transitions.keys()
+            if len(missing_states) != 0:
                 errors.append(
-                    f"State {state} must have transition for {', '.join(empty_tranistions)} input symbols"
+                    f"States {', '.join(missing_states)} are missing in the transition function"
                 )
 
-        for state, state_tranistions in self.output_function_.items():
-            empty_tranistions = [k for k, v in state_tranistions.items() if not v]
-            if len(empty_tranistions) != 0:
+            missing_states = transitions.keys() - output_function.keys()
+            if len(missing_states) != 0:
                 errors.append(
-                    f"State {state} must have output for {', '.join(empty_tranistions)} input alphabet"
+                    f"States {', '.join(missing_states)} are missing in the output function"
                 )
+            return None, errors
 
-        return errors
+        repeated = set()
+        missing_transitions = {}
+
+        for src_state, state_tranistions in transitions.items():
+            state_inputs = set()
+            for in_, dst_state in state_tranistions:
+                if automata.has_in_transitions(src_state, in_):
+                    repeated.add(src_state)
+                else:
+                    automata.add_to_transitions(in_, src_state, dst_state)
+                state_inputs.add(in_)
+            if len(state_inputs) != len(inputs):
+                missing_transitions[src_state] = inputs - state_inputs
+
+        for src_state, state_tranistions in output_function.items():
+            state_inputs = set()
+            for in_, out_ in state_tranistions:
+                if automata.has_in_output_function(src_state, in_):
+                    repeated.add(dst_state)
+                else:
+                    automata.add_to_output_function(in_, src_state, out_)
+                state_inputs.add(in_)
+            if len(state_inputs) != len(inputs):
+                missing_transitions[src_state] = inputs - state_inputs
+
+        for state in repeated:
+            errors.append(
+                f"State {state} has more then one transition for the same input symbol"
+            )
+        for state, state_inputs in missing_transitions.items():
+            errors.append(
+                f"State {state} misses transitions by the {', '.join(state_inputs)} input symbols"
+            )
+        if len(errors) != 0:
+            return None, errors
+        return automata, errors

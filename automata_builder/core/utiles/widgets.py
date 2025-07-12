@@ -1,3 +1,5 @@
+from typing import Optional
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import *
@@ -137,7 +139,7 @@ class EditableTextItem(QGraphicsTextItem):
 
 
 class VerticalMessagesWidget(QListWidget):
-    def __init__(self, parent: QWidget | None = None, spacing: int = 2) -> None:
+    def __init__(self, parent: Optional[QWidget] = None, spacing: int = 2) -> None:
         super().__init__(parent)
         self.setSpacing(spacing)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
@@ -185,7 +187,7 @@ class VerticalMessagesWidget(QListWidget):
 
 
 class OverlayWidget(QWidget):
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
@@ -198,7 +200,7 @@ class TableWidget(QTableWidget):
         data: list,
         column_names: list[str] | None = None,
         row_names: list[str] | None = None,
-        parent: QWidget | None = None,
+        parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         for i, row in enumerate(data):

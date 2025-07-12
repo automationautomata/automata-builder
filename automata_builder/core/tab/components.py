@@ -1,5 +1,5 @@
 import enum
-from typing import Callable
+from typing import Callable, Optional
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
@@ -14,7 +14,7 @@ from ..utiles.widgets import OverlayWidget, VerticalMessagesWidget
 
 
 class AlphabetEdit(QTextEdit):
-    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+    def __init__(self, text: str = "", parent: Optional[QWidget] = None) -> None:
         super().__init__(text, parent)
         self.textChanged.connect(self.format_text)
         self.setPlaceholderText("{0, 1, 2, 3}")
@@ -80,11 +80,11 @@ class AlphabetEdit(QTextEdit):
         self.blockSignals(False)
 
 
-class AutomataDataWidget(QWidget):
+class ParametersPanel(QWidget):
     def __init__(
         self,
-        parent: QWidget | None = None,
-        alphabet_item_height: int = 60,
+        parent: Optional[QWidget] = None,
+        alphabet_item_height: int = 50,
         initial_state_height: int = 40,
     ) -> None:
         super().__init__(parent)
@@ -97,12 +97,19 @@ class AutomataDataWidget(QWidget):
         self.initial_state_field = QTextEdit(self)
         self.initial_state_field.setMinimumHeight(initial_state_height)
         self.initial_state_field.setPlaceholderText("initial state")
-        self.initial_state_field.textChanged.connect(self.filter_initial_state_input)
+        self.initial_state_field.textChanged.connect(self.filter_state_input)
 
         self.verify_button = QPushButton("Verify")
         self.draw_button = QPushButton("Draw")
 
-        layout = QVBoxLayout(self)
+        self.prefix_field = QTextEdit(self)
+        self.prefix_field.setPlaceholderText("prefix")
+
+        self.last_state_field = QTextEdit(self)
+        self.last_state_field.setPlaceholderText("last state")
+        self.last_state_field.textChanged.connect(self.filter_state_input)
+
+        layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         layout.setSpacing(4)
@@ -119,9 +126,17 @@ class AutomataDataWidget(QWidget):
 
         layout.addSpacing(initial_state_height // 3)
         layout.addWidget(self.verify_button)
+
+        layout.addSpacing(initial_state_height // 3)
+        layout.addWidget(self.last_state_field)
+        layout.addSpacing(initial_state_height // 3)
+        layout.addWidget(self.prefix_field)
+        layout.addSpacing(initial_state_height // 3)
         layout.addWidget(self.draw_button)
 
-    def filter_initial_state_input(self) -> None:
+        self.setLayout(layout)
+
+    def filter_state_input(self) -> None:
         text_edit = self.initial_state_field
         text = text_edit.toPlainText()
         filtered_text = "".join(s for s in text if s not in "\r\t\n ")
@@ -145,6 +160,12 @@ class AutomataDataWidget(QWidget):
     def initial_state(self) -> str:
         return self.initial_state_field.toPlainText()
 
+    def prefix(self) -> str:
+        return self.prefix_field.toPlainText()
+
+    def last_state(self) -> str:
+        return self.last_state_field.toPlainText()
+
     def set_data(
         self, input_alphabet: list[str], output_alphabet: list[str], initial_state: str
     ) -> None:
@@ -157,7 +178,7 @@ class AutomataDataWidget(QWidget):
 
 
 class PlotWidget(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         fig = Figure(figsize=(5, 5))
         self.canvas = FigureCanvasQTAgg(fig)
@@ -169,10 +190,25 @@ class PlotWidget(QWidget):
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 
-    def draw(self, x: list[int], y: list[int], title: str = "") -> None:
-        self.ax.cla()
+    def draw(
+        self,
+        x: list[int],
+        y: list[int],
+        xlim: Optional[tuple[int, int]] = None,
+        ylim: Optional[tuple[int, int]] = None,
+        title: str = "",
+    ) -> None:
+        shift = 0.2
+        self.ax.clear()
+        self.ax.grid(False)
         self.ax.set_title(title)
-        self.ax.scatter(x, y)
+        self.ax.scatter(x, y, color="red", s=5)
+
+        if xlim is not None:
+            self.ax.set_xlim(xmin=xlim[0] - shift, xmax=xlim[1] + shift)
+        if ylim is not None:
+            self.ax.set_ylim(ymin=ylim[0] - shift, ymax=ylim[1] + shift)
+
         self.ax.grid(True)
         self.canvas.draw()
 
@@ -183,7 +219,7 @@ class SidePanel(QWidget):
         PLOT = enum.auto()
         EMPTY = enum.auto()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.cur_mode_ = self.Mode.EMPTY
 
@@ -271,11 +307,19 @@ class SidePanel(QWidget):
             raise Exception("Error messages widget doesn't set")
         self.error_messages.clear()
 
-    def draw_plot(self, x: list[int], y: list[int]) -> None:
+    def draw_plot(
+        self,
+        x: list[int],
+        y: list[int],
+        xlim: Optional[tuple[int, int]] = None,
+        ylim: Optional[tuple[int, int]] = None,
+    ) -> None:
+        # xlim = xmin, xmax
+        # ylim = ymin, ymax
         if self.current_mode != self.Mode.ERROR_MESSAGES:
             raise Exception("Plot widget doesn't set")
 
-        self.plot.draw(x, y)
+        self.plot.draw(x, y, xlim, ylim)
 
     def switch_to_plot(self) -> None:
         if self.current_mode == self.Mode.PLOT:
@@ -293,8 +337,8 @@ class SidePanel(QWidget):
         self.set_mode(self.Mode.EMPTY)
 
 
-class AutomataWordProcessing(QWidget):
-    def __init__(self, parent: QWidget | None = None) -> None:
+class WordProcessing(QWidget):
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
@@ -362,7 +406,7 @@ class AutomataWordProcessing(QWidget):
 
 
 class TactCounter(OverlayWidget):
-    def __init__(self, parent: QWidget | None = None):
+    def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.value_ = 0
         self.counter = QLabel("0", self)
@@ -408,7 +452,7 @@ class AutomataContainer(QWidget):
 
     def __init__(
         self,
-        parent: QWidget | None = None,
+        parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self.view = AutomataGraphView()
@@ -420,7 +464,7 @@ class AutomataContainer(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
 
-        self.word_processing = AutomataWordProcessing()
+        self.word_processing = WordProcessing()
         self.word_processing.setMinimumHeight(self.height() // 6)
         self.word_processing.setMaximumWidth(self.width())
         self.word_processing.setSizePolicy(
@@ -443,7 +487,7 @@ class AutomataContainer(QWidget):
 
         self.prev_input_word = self.word_processing.input_word
         self.transitions_history = []
-        self.automata_check = None
+        self.automata_errors_handler = None
 
     def resizeEvent(self, event: QResizeEvent | None = None):
         self.draw_tact_counter()
@@ -468,14 +512,28 @@ class AutomataContainer(QWidget):
         new_geom.moveBottomLeft(pos)
         self.tact_counter.setGeometry(new_geom)
 
-    def set_automata_check(self, automata_check: Callable[[Automata], bool]) -> None:
-        self.automata_check = automata_check
+    def set_automata_errors_handler(
+        self, automata_errors_handler: Callable[[Automata], bool]
+    ) -> None:
+        self.automata_errors_handler = automata_errors_handler
 
-    def automata(self) -> Automata:
-        return self.view.to_automata()
+    def automata(self) -> tuple[Automata | None, list[str]]:
+        return Automata.detailed_build(*self.automata_tables())
+
+    def automata_tables(self) -> tuple[str, dict[str, list], dict[str, list]]:
+        initial_state = self.view.initial_state()
+        transitions_table = self.view.get_transitions_table()
+        outputs_table = self.view.get_outputs_table()
+        return initial_state, transitions_table, outputs_table
 
     def filter_input(self) -> None:
         word = self.word_processing.input_word
+        automata, errors = self.automata()
+        if not automata:
+            if self.automata_errors_handler:
+                self.automata_errors_handler(errors)
+            return
+
         input_alphabet = self.automata().input_alphabet
         if all(s in input_alphabet for s in word):
             self.prev_input_word = word
@@ -486,11 +544,12 @@ class AutomataContainer(QWidget):
         QMessageBox.warning(self, "Error", "Invalid input symbol")
 
     def forward_click(self) -> None:
-        if not (self.word_processing.input_word and self.automata_check):
+        if not (self.word_processing.input_word and self.automata_errors_handler):
             return
 
-        automata = self.automata()
-        if not self.automata_check(automata):
+        automata, errors = self.automata()
+        if not automata:
+            self.automata_errors_handler(errors)
             return
 
         input_word = self.word_processing.input_word
@@ -522,7 +581,7 @@ class AutomataContainer(QWidget):
             self.tact_counter.increnemt()
 
     def backward_click(self) -> None:
-        if not (self.word_processing.input_word and self.automata_check):
+        if not (self.word_processing.input_word and self.automata_errors_handler):
             return
 
         if len(self.transitions_history) == 0:

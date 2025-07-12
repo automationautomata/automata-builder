@@ -6,7 +6,6 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 
-
 from ..utiles.widgets import EditableTextItem
 
 
@@ -97,6 +96,7 @@ class Edge(QGraphicsPathItem):
     TEXT_COLOR = Qt.GlobalColor.red
     BASIC_COLOR = Qt.GlobalColor.black
     SELECTED_COLOR = Qt.GlobalColor.red
+    TEXT_FONT = QFont("Arial", 14)
 
     def __init__(
         self,
@@ -113,19 +113,20 @@ class Edge(QGraphicsPathItem):
         self.source = source
         self.destination = destination
         self.is_reversed = self.destination.name in self.source.in_edges
-        self.text_font = QFont("Arial", 14)
         self.setPen(QPen(self.BASIC_COLOR, 2))
         self.setFlag(
             QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
             | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
         )
+
+        self.text_item: EditableTextItem = None
+        self.arrow_head: QGraphicsPolygonItem = None
+
         self.arrow_size = 10
-        self.arrow_head = None
-        self.text_item: QGraphicsTextItem = None
-        self.dragging_control_point = False
         self.bend_ratio = 0.5  # значение от 0 до 1, где 0 — у source, 1 — у destination
         self.bend_offset = 5.0
         self.click_area_size = click_area_size
+        self.dragging_control_point = False
 
     def isloop(self):
         return self.destination is self.source
@@ -145,7 +146,7 @@ class Edge(QGraphicsPathItem):
     def outputs(self) -> list[str]:
         return list(self.transitions.keys())
 
-    def has_transition(self, input_value: str, output_value: str) -> bool:
+    def has_in_transitions(self, input_value: str, output_value: str) -> bool:
         if input_value not in self.transitions:
             return False
         return output_value in self.transitions[input_value]
@@ -160,12 +161,11 @@ class Edge(QGraphicsPathItem):
         if not self.text_item:
             return
 
-        font_size = self.text_font.pointSizeF()
-        if font_size <= 0:
-            font_size = self.text_font.pointSize()
+        font = self.text_item.font()
+        if font.pointSizeF() > 9:
+            font.setPointSizeF(font.pointSizeF() - 0.12)
+            self.text_item.setFont(font)
 
-        self.text_font.setPointSizeF(font_size - 0.12)
-        self.text_item.setFont(self.text_font)
         self.text_item.setPlainText(self.edge_text)
 
     def remove_transition(self, input_value: str, output_value: str) -> None:
@@ -250,6 +250,7 @@ class Edge(QGraphicsPathItem):
 
     def update_path(self) -> None:
         path = QPainterPath()
+
         if self.isloop():
             rect = self.source.rect()
             top_center = self.source.mapToScene(QPointF(rect.center().x(), rect.top()))
@@ -271,7 +272,7 @@ class Edge(QGraphicsPathItem):
 
         self.setPath(path)
         self.draw_arrowhead()
-        self.create_edge_text()
+        self.draw_edge_text()
 
     @staticmethod
     def get_control_point(
@@ -323,30 +324,33 @@ class Edge(QGraphicsPathItem):
 
         return boundary_point_scene
 
-    def create_edge_text(self) -> None:
-        mid_point = self.path().pointAtPercent(0.5)
-        offset = QPointF(0, -25)
-        if self.text_item:  # and self.output_text_item and self.separator_text_item:
-            self.text_item.setPos(mid_point + offset)
-            return
+    def draw_edge_text(self) -> None:
+        if not self.text_item:
+            self.text_item = EditableTextItem(self.edge_text, self)
+            self.text_item.setFlag(
+                QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
+            )
+            self.text_item.setFlag(
+                QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, False
+            )
+            self.text_item.setFlag(
+                QGraphicsEllipseItem.GraphicsItemFlag.ItemIsFocusable, False
+            )
+            self.text_item.setDefaultTextColor(Qt.GlobalColor.red)
+            self.text_item.setFont(self.TEXT_FONT)
+            self.text_item.setPlainText(self.edge_text)
+            scene = self.scene()
+            if scene:
+                scene.addItem(self.text_item)
 
-        # Находим середину линии для отображения веса
+        if self.isloop():
+            bend_point = self.path().pointAtPercent(0.5)
+        else:
+            ratio = max(0.25, min(self.bend_ratio, 0.75))
+            bend_point = self.path().pointAtPercent(1 - ratio)
 
-        # Текстовый элемент для входа
-        text_item = EditableTextItem(self.edge_text, self)
-        text_item.setFlag(
-            QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
-        )
-        text_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, False)
-        text_item.setFlag(QGraphicsEllipseItem.GraphicsItemFlag.ItemIsFocusable, False)
-        text_item.setDefaultTextColor(Qt.GlobalColor.red)
-        text_item.setFont(self.text_font)
-        text_item.setPos(mid_point + offset)
-
-        scene = self.scene()
-        if scene:
-            scene.addItem(text_item)
-            self.text_item = text_item
+        offset_coords = QPointF(0, -25)
+        self.text_item.setPos(bend_point + offset_coords)
 
     def draw_arrowhead(self) -> None:
         # Удаляем старый стрелочный элемент, если есть
@@ -357,7 +361,6 @@ class Edge(QGraphicsPathItem):
             del self.arrow_head
 
         path_length = self.path().length()
-
         if path_length == 0:
             return
 
@@ -409,9 +412,9 @@ class Edge(QGraphicsPathItem):
 
     def serialize(self) -> dict[str, Any]:
         return {
-            "transitions": self.transitions,  # первый ключ или по необходимости
             "source": self.source.name,
             "destination": self.destination.name,
+            "transitions": self.transitions,
             "bend_ratio": self.bend_ratio,
             "bend_offset": self.bend_offset,
         }

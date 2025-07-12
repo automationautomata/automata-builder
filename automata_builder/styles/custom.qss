@@ -26,7 +26,7 @@ AutomataGraphView > QWidget > QPushButton {
     margin: 0px;
 }
 
-AutomataTabWidget {
+AutomataTab {
     padding: 0px;
     margin: 0px;
     background-color: #ffffff; /* Светлый фон */
@@ -82,3 +82,4 @@ AutomataContainer > OverlayWidget > QLabel {
     font-family: sans-serif;
 } */
 
+PlotWidget QWidget { }

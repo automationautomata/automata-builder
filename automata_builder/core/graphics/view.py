@@ -1,12 +1,12 @@
 import json
 import os
+from typing import Optional
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, Qt, QRectF
 from PyQt6.QtGui import *
 from PyQt6.QtSvg import QSvgGenerator
 from PyQt6.QtWidgets import *
 
-from ..automata import Automata
 from ..data import AUTOMATA_EXT, DATA_DIR, VIEW_FILE_NAME
 from ..graphics.items import Edge, Node
 from ..utiles import utiles
@@ -20,11 +20,11 @@ from ..utiles.widgets import (
 class EdgeEditDialog(TableInputDialog):
     def __init__(self, edge: Edge, title: str = "") -> None:
         self.transitions = []
-        for in_ in edge.outputs():
-            for out_ in edge.input(in_):
+        for out_ in edge.outputs():
+            for in_ in edge.input(out_):
                 self.transitions.append([in_, out_])
 
-        row_labels = [[f"{r[1]}:", f"{r[0]}:"] for r in self.transitions]
+        row_labels = [[f"{r[0]}:", f"{r[1]}:"] for r in self.transitions]
         super().__init__(*row_labels, col_titles=["Вход", "Выход"], title=title)
 
         for i in range(len(self.transitions)):
@@ -42,7 +42,8 @@ class EdgeEditDialog(TableInputDialog):
             self.grid_layout.addWidget(widget, i, 0)
 
     def delete_transition(self, delete_button: QPushButton) -> None:
-        row_ind, _, _, _ = self.grid_layout.getItemPosition(delete_button)
+        index = self.grid_layout.indexOf(delete_button)
+        row_ind, _, _, _ = self.grid_layout.getItemPosition(index)
 
         in_edit, out_edit = self.line_edits.pop(row_ind - 1)
         in_label, out_label = self.labels.pop(row_ind - 1)
@@ -80,7 +81,7 @@ class EdgeEditDialog(TableInputDialog):
             return []
 
         if not values:
-            return None
+            return self.transitions
 
         for i in range(len(values)):
             if not values[i][0]:
@@ -92,10 +93,10 @@ class EdgeEditDialog(TableInputDialog):
         return values
 
 
-class AutomataDrawingScene(QGraphicsScene):
+class BuildingScene(QGraphicsScene):
     INITIAL_STATE_COLOR = QColor(128, 25, 90, 180)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
 
         self.nodes: dict[str, Node] = {}  # словарь имя-узел
@@ -230,7 +231,7 @@ class AutomataDrawingScene(QGraphicsScene):
             if not values or not (values[0] and values[1]):
                 return
             in_, out_ = values
-            edge.add_transition(in_, out_)
+            edge.add_transition(out_, in_)
 
         delete_action = QAction("Удалить", self)
         edit_action = QAction("Редактировать", self)
@@ -261,28 +262,23 @@ class AutomataDrawingScene(QGraphicsScene):
     def delete_node(self, node: Node) -> None:
         if node.has_loop():
             edge = node.in_edges.pop(node.name)
-            node.out_edges.pop(node.name)
-            self.removeItem(edge)
-            del edge
+            self.delete_edge(edge)
 
         for src_node in list(node.in_edges.keys()):
             # Удаляем текущий узел (приемник)
             # из списка ребер узла, из которого оно исходит
             edge = node.in_edges.pop(src_node)
-            edge.source.out_edges.pop(node.name)
 
             # Удаляем само реберо
-            self.removeItem(edge)
-            del edge
+            self.delete_edge(edge)
 
         for dst_node in list(node.out_edges.keys()):
             # Удаляем текущий узел (источник)
             # из списка ребер узла, в которое ребро входит
             edge = node.out_edges.pop(dst_node)
-            edge.destination.in_edges.pop(node.name)
 
-            self.removeItem(edge)
-            del edge
+            # Удаляем само реберо
+            self.delete_edge(edge)
 
         # Удаляем узел реберо
         self.nodes.pop(node.name)
@@ -292,7 +288,9 @@ class AutomataDrawingScene(QGraphicsScene):
     def delete_edge(self, edge: Edge) -> None:
         edge.source.out_edges.pop(edge.destination.name)
         edge.destination.in_edges.pop(edge.source.name)
+
         self.removeItem(edge)
+        self.edges.pop(self.edges.index(edge))
         del edge
 
     def set_initial_node(self, node: Node) -> Node:
@@ -345,13 +343,27 @@ class AutomataDrawingScene(QGraphicsScene):
         initial_state = ""
         if self.initial_state:
             initial_state = self.initial_state.name
+
+        rect = self.sceneRect()
+
         return {
             "nodes": [node.serialize() for node in self.nodes.values()],
             "edges": [edge.serialize() for edge in self.edges],
             "initial_state": initial_state,
+            "scene_rect": {
+                "left": rect.left(),
+                "top": rect.top(),
+                "width": rect.width(),
+                "height": rect.height(),
+            },
         }
 
     def deserialize(self, data: dict) -> None:
+        if "scene_rect" in data:
+            rect = data["scene_rect"]
+            self.setSceneRect(
+                QRectF(rect["left"], rect["top"], rect["width"], rect["height"])
+            )
         # Восстановливаем узлы по именам
         self.nodes = {}
         for node_data in data["nodes"]:
@@ -381,9 +393,9 @@ class AutomataDrawingScene(QGraphicsScene):
 
 
 class AutomataGraphView(QGraphicsView):
-    def __init__(self, parent: QWidget | None = None, button_size: int = 40) -> None:
+    def __init__(self, parent: Optional[QWidget] = None, button_size: int = 40) -> None:
         super().__init__(parent)
-        self.scene_ = AutomataDrawingScene(self)
+        self.scene_ = BuildingScene(self)
         self.setScene(self.scene_)
         self.setWhatsThis("Это описание данного виджета или кнопки.")
 
@@ -487,7 +499,7 @@ class AutomataGraphView(QGraphicsView):
             self,
             "Сохранить файл",
             DATA_DIR,
-            f"Файлы ({VIEW_FILE_NAME}.{AUTOMATA_EXT})",
+            initialFilter=f"Файлы (*.{AUTOMATA_EXT})",
         )
         if not file_path:
             return
@@ -500,7 +512,7 @@ class AutomataGraphView(QGraphicsView):
 
     def load_view(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл", DATA_DIR, f"Файлы (*.{AUTOMATA_EXT})"
+            self, "Выберите файл", DATA_DIR, initialFilter=f"Файлы (*.{AUTOMATA_EXT})"
         )
         if not file_path:
             return
@@ -544,8 +556,8 @@ class AutomataGraphView(QGraphicsView):
             painter.setFont(Node.FONT)
             self.scene_.render(
                 painter,
-                self.scene_.itemsBoundingRect(),
-                self.scene_.itemsBoundingRect(),
+                self.scene_.sceneRect(),
+                self.scene_.sceneRect(),
                 mode=Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             )
             painter.end()
@@ -555,24 +567,36 @@ class AutomataGraphView(QGraphicsView):
         except IOError:
             QMessageBox.warning(self, "Error", "Automata save failed")
 
-    def to_automata(self) -> Automata:
-        initial_state = ""
-        scene = self.scene_
-        if scene.initial_state:
-            initial_state = scene.initial_state.name
+    def initial_state(self) -> str:
+        initial_state = self.scene_.initial_state
+        return initial_state.name if initial_state else ""
 
-        automata = Automata(list(scene.nodes.keys()), initial_state)
-        for name, node in scene.nodes.items():
+    def get_transitions_table(self) -> dict[str, list]:
+        scene = self.scene_
+
+        transitions = {}
+        for src_name, node in scene.nodes.items():
+            transitions[src_name] = []
             for dest_name, edge in node.out_edges.items():
                 for out_ in edge.outputs():
-                    for in_ in edge.input(out_):
-                        automata.add_input(in_)
-                        automata.add_output(out_)
-                        automata.add_transition(in_, name, dest_name, out_)
+                    transitions[src_name].extend(
+                        (in_, dest_name) for in_ in edge.input(out_)
+                    )
 
-        automata.reset_input_order(sorted(automata.input_alphabet))
-        automata.reset_output_order(sorted(automata.output_alphabet))
-        return automata
+        return transitions
+
+    def get_outputs_table(self) -> dict[str, list]:
+        scene = self.scene_
+
+        outputs_table = {}
+        for src_name, node in scene.nodes.items():
+            outputs_table[src_name] = []
+            for edge in node.out_edges.values():
+                for out_ in edge.outputs():
+                    outputs_table[src_name].extend(
+                        (in_, out_) for in_ in edge.input(out_)
+                    )
+        return outputs_table
 
     def is_empty(self):
         return len(self.scene_.items()) == 0
