@@ -29,27 +29,25 @@ class AutomataTab(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
 
-        self.params_panel = ParametersPanel()
-        self.params_panel.setMaximumHeight(int(0.9 * self.height()))
+        self.params_panel = ParametersPanel(self.word_input_condition)
+        self.params_panel.setMaximumHeight(int(0.94 * self.height()))
         self.params_panel.setMaximumWidth(self.width() // 4)
         self.params_panel.setMinimumWidth(0)
 
-        self.side_panel = SidePanel()
-        # self.side_panel.sizeHint = lambda: QSize(0, self.height() // 3)
-        # self.side_panel.setHidden(True)
         self.errors_panel_width = self.width() // 3
         self.plot_panel_width = self.height()
         side_panel_max_width = max(self.plot_panel_width, self.errors_panel_width)
+
+        self.side_panel = SidePanel()
         self.side_panel.setMaximumWidth(side_panel_max_width)
         self.side_panel.setMinimumWidth(0)
 
-        main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.addWidget(self.automata_container)
-        main_layout.addWidget(self.params_panel, 0, Qt.AlignmentFlag.AlignTop)
-        main_layout.addWidget(self.side_panel)
+        self.layout_ = QHBoxLayout(self)
+        self.layout_.setContentsMargins(0, 0, 0, 0)
+        self.layout_.addWidget(self.automata_container, 2)
+        self.layout_.addWidget(self.params_panel, 0, Qt.AlignmentFlag.AlignTop)
+        self.layout_.addWidget(self.side_panel, 0)
 
-        self.params_panel.prefix_field.textChanged.connect(self.filter_prefix_input)
         self.params_panel.verify_button.clicked.connect(self.verify_click)
         self.params_panel.draw_button.clicked.connect(self.draw_click)
         self.side_panel.close_button.clicked.connect(self.close_panel_click)
@@ -60,7 +58,7 @@ class AutomataTab(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
 
     def automata(self) -> Automata | None:
-        """Show errors and return None if automata is incorrect"""
+        """Return automata or show errors and return None if automata is incorrect"""
         automata, errors = self.automata_container.automata()
         if automata:
             errors = self.compare_data(
@@ -112,6 +110,7 @@ class AutomataTab(QWidget):
         )
 
         prefix = self.params_panel.prefix()
+        suffix = self.params_panel.suffix()
         last_state = self.params_panel.last_state()
         if last_state and last_state not in automata.states:
             self.show_errors(["Incorrect last state"])
@@ -120,24 +119,23 @@ class AutomataTab(QWidget):
         prec = 14
         x, y = [], []
         for i in range(1, prec):
-            for in_word, out_word in automata.pairs_generator(i, prefix, last_state):
+            pairs = automata.pairs_generator(i, prefix, suffix, last_state)
+            for in_word, out_word in pairs:
                 x.append(automata.to_number(in_word))
                 y.append(automata.to_number(out_word))
-            # for in_word, out_word in automata.pairs_generator(i):
-            #     x.append(automata.to_number(in_word))
-            #     y.append(automata.to_number(out_word))
 
         if self.side_panel.current_mode != SidePanel.Mode.PLOT:
             self.side_panel.switch_to_plot()
 
-        xlim = 1, len(automata.input_alphabet) + 1
-        ylim = 1, len(automata.output_alphabet) + 1
         if not self.is_panel_hidden():
-            # x, y = zip(*sorted(zip(x, y)))
+            xlim = 1, len(automata.input_alphabet) + 1
+            ylim = 1, len(automata.output_alphabet) + 1
             self.side_panel.draw_plot(x, y, xlim, ylim)
             return
 
         def after_finish():
+            xlim = 1, len(automata.input_alphabet) + 1
+            ylim = 1, len(automata.output_alphabet) + 1
             self.side_panel.draw_plot(x, y, xlim, ylim)
 
         self.toggle_panel(self.plot_panel_width, after_finish)
@@ -155,36 +153,36 @@ class AutomataTab(QWidget):
 
         self.toggle_panel(after_finish=after_finish)
 
-    def filter_prefix_input(self):
+    def word_input_condition(self, text: str) -> bool:
         automata, _ = self.automata_container.automata()
-        text = self.params_panel.prefix_field.toPlainText()
-
         if not automata:
-            return
+            return False
+        symbols = set(text)
         errors = self.compare_data(
-            automata.input_alphabet, automata.output_alphabet, automata.initial_state
+            automata.input_alphabet,
+            automata.output_alphabet,
+            automata.initial_state,
         )
-        if len(errors) == 0 and set(text).issubset(automata.input_alphabet):
-            self.prev_prefix_text = text
-            return
-        self.params_panel.prefix_field.blockSignals(True)
-        self.params_panel.prefix_field.setText(self.prev_prefix_text)
-        self.params_panel.prefix_field.blockSignals(False)
+        return len(errors) == 0 and symbols.issubset(automata.input_alphabet)
 
     def compare_data(
         self, input_alphabet: list[str], output_alphabet: list[str], initial_state: str
     ) -> list[str]:
-        input_alphabet = self.params_panel.input_alphabet()
-        output_alphabet = self.params_panel.output_alphabet()
-        initial_state = self.params_panel.initial_state()
+        entered_input_alphabet = self.params_panel.input_alphabet()
+        entered_output_alphabet = self.params_panel.output_alphabet()
+        entered_initial_state = self.params_panel.initial_state()
 
         input_alphabet_check = (
-            set(input_alphabet) == set(input_alphabet) or len(input_alphabet) == 0
+            set(input_alphabet) == set(entered_input_alphabet)
+            or len(entered_input_alphabet) == 0
         )
         output_alphabet_check = (
-            set(output_alphabet) == set(output_alphabet) or len(output_alphabet) == 0
+            set(entered_output_alphabet).issuperset(output_alphabet)
+            or len(entered_output_alphabet) == 0
         )
-        initial_state_check = initial_state == initial_state or not initial_state
+        initial_state_check = (
+            initial_state == entered_initial_state or not entered_initial_state
+        )
 
         if input_alphabet_check and output_alphabet_check and initial_state_check:
             return []
@@ -279,8 +277,16 @@ class AutomataTab(QWidget):
             self.side_panel.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
             )
+            i = self.layout_.indexOf(self.side_panel)
+            j = self.layout_.indexOf(self.automata_container)
             if width_diff > 0:
                 self.side_panel.setMaximumWidth(dest_width)
+                self.layout_.setStretch(i, 2)
+                self.layout_.setStretch(j, 1)
+            else:
+                self.layout_.setStretch(i, 0)
+                self.layout_.setStretch(j, 2)
+
             if after_finish:
                 after_finish()
 
@@ -289,23 +295,31 @@ class AutomataTab(QWidget):
         group.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def load(self, data: dict) -> None:
-        params_panel = data["params_panel"]
+        params = data["params"]
         self.params_panel.set_data(
-            params_panel["input_alphabet"],
-            params_panel["output_alphabet"],
-            params_panel["initial_state"],
+            params["input_alphabet"],
+            params["output_alphabet"],
+            params["initial_state"],
+        )
+        self.params_panel.set_draw_filters(
+            params["prefix"],
+            params["suffix"],
+            params["last_state"],
         )
         scene = self.automata_container.view.scene()
         scene.deserialize(data["scene"])
 
     def dump(self) -> dict:
-        params_panel = {
+        params = {
             "input_alphabet": self.params_panel.input_alphabet(),
             "output_alphabet": self.params_panel.output_alphabet(),
             "initial_state": self.params_panel.initial_state(),
+            "prefix": self.params_panel.prefix(),
+            "suffix": self.params_panel.suffix(),
+            "last_state": self.params_panel.last_state(),
         }
         scene = self.automata_container.view.scene()
-        return {"params_panel": params_panel, "scene": scene.serialize()}
+        return {"params": params, "scene": scene.serialize()}
 
     def is_empty(self):
         return self.automata_container.is_empty_scene() or self.params_panel.is_empty()

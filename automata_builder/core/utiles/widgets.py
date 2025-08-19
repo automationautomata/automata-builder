@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import *
 
 from ..lang import getlocale
+from ..utiles.utiles import textfilter
 
 
 class MultipleInputDialog(QDialog):
@@ -32,7 +33,7 @@ class MultipleInputDialog(QDialog):
         layout.addLayout(button_layout)
         self.setLayout(layout)
 
-    def get_values(self) -> list[str] | None:
+    def get_values(self) -> Optional[list[str]]:
         if not self.exec():
             return None
         try:
@@ -68,7 +69,7 @@ class TableInputDialog(MultipleInputDialog):
     def __init__(
         self,
         *row_labels: list[str],
-        col_titles: list[str] | None = None,
+        col_titles: Optional[list[str]] = None,
         title: str = "",
     ) -> None:
         super().__init__(title)
@@ -198,8 +199,8 @@ class TableWidget(QTableWidget):
     def __init__(
         self,
         data: list,
-        column_names: list[str] | None = None,
-        row_names: list[str] | None = None,
+        column_names: Optional[list[str]] = None,
+        row_names: Optional[list[str]] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -214,3 +215,53 @@ class TableWidget(QTableWidget):
 
         self.horizontalHeader().setStretchLastSection(True)
         # self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+
+class FilteredTextEdit(QTextEdit):
+    def __init__(
+        self, condition: Callable[[str], bool], parent: Optional[QWidget] = None
+    ) -> None:
+        super().__init__(parent)
+        self.set_condition(condition)
+
+    def set_condition(self, condition: Callable[[str], bool]):
+        self.textChanged.connect(
+            textfilter(
+                condition,
+                self.toPlainText,
+                self.set_text,
+            )
+        )
+
+    def set_text(self, text: str) -> None:
+        self.blockSignals(True)
+
+        self.setText(text)
+        cursor = self.textCursor()
+        cursor.setPosition(len(text), cursor.MoveMode.MoveAnchor)
+        self.setTextCursor(cursor)
+
+        self.blockSignals(False)
+
+
+class FilteredLineEdit(QLineEdit):
+    def __init__(
+        self, condition: Callable[[str], bool], parent: Optional[QWidget] = None
+    ) -> None:
+        super().__init__(parent)
+        self.set_condition(condition)
+
+    def set_condition(self, condition: Callable[[str], bool]):
+        self.textChanged.connect(
+            textfilter(
+                condition,
+                self.text,
+                self.set_text,
+            )
+        )
+
+    def set_text(self, text: str) -> None:
+        self.blockSignals(True)
+        self.setText(text)
+        self.setCursorPosition(len(text))
+        self.blockSignals(False)

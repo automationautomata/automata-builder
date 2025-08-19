@@ -1,10 +1,11 @@
 import json
 import os
-from os.path import join, dirname
-
-from ..data import RESOURCES_DIRS, STYLESHEETS_DIR
+from os.path import dirname, join
+from typing import Any, Callable
 
 from PyQt6.QtCore import QDir
+
+from ..data import RESOURCES_DIRS, STYLESHEETS_DIR
 
 
 def load_stylesheet(filename: str):
@@ -54,3 +55,24 @@ def json_to_file(data: dict, path: str, filename: str) -> bool:
 def register_resources():
     for dir in RESOURCES_DIRS:
         QDir.addSearchPath(dirname(dir), dir)
+
+
+class textfilter:
+    def __init__(
+        self,
+        condition: Callable[[str], bool],
+        get_text: Callable[[], str],
+        set_text: Callable[[str], Any],
+    ) -> None:
+        self.prev_text = get_text()
+
+        self.set_text = set_text
+        self.get_text = get_text
+        self.condition = condition
+
+    def __call__(self) -> None:
+        text = self.get_text()
+        if self.condition(text):
+            self.prev_text = text
+            return
+        self.set_text(self.prev_text)

@@ -153,14 +153,20 @@ class Automata:
             yield f"{prefix}{''.join(seq)}"
 
     def pairs_generator(
-        self, length: int, input_prefix: str = "", last_state: str = ""
+        self,
+        length: int,
+        input_prefix: str = "",
+        output_suffix: str = "",
+        last_state: str = "",
     ) -> Generator[tuple[str, str], None, None]:
-        if last_state not in self.states:
+        if last_state and last_state not in self.states:
             raise ValueError("Last state must be in given states")
 
         for in_word in self.words(length, input_prefix):
             states, out_word = self.__read__(in_word)
-            if not last_state or states[-1] == last_state:
+
+            state_check = not last_state or states[-1] == last_state
+            if state_check and out_word.endswith(output_suffix):
                 yield in_word, out_word
 
     @staticmethod

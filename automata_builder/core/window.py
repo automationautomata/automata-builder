@@ -16,14 +16,14 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         lang.current_lang = "ru"
-        self.setWindowTitle("QTabWidget с QGraphicsView")
+        self.setWindowTitle("Builder")
         self.resize(850, 720)
 
         self.tab_widget = QTabWidget(self)
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
 
-        self.btn_add = QPushButton("Add AutomataGraphView")
+        self.btn_add = QPushButton("Add Tab")
         self.btn_add.clicked.connect(self.add_view)
 
         self.btn_switch = QPushButton("Switch to Next Tab")
@@ -33,10 +33,15 @@ class MainWindow(QWidget):
         self.btn_load.setMaximumWidth(100)
         self.btn_load.clicked.connect(self.choose_session)
 
+        self.btn_save = QPushButton("Save Session")
+        self.btn_save.setMaximumWidth(100)
+        self.btn_save.clicked.connect(self.save_current_session)
+
         button_layout = QHBoxLayout()
         button_layout.addWidget(self.btn_add)
         button_layout.addWidget(self.btn_switch)
         button_layout.addWidget(self.btn_load)
+        button_layout.addWidget(self.btn_save)
 
         main_layout = QVBoxLayout()
         main_layout.addWidget(self.tab_widget)

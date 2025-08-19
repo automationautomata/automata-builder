@@ -30,7 +30,6 @@ class EdgeEditDialog(TableInputDialog):
         for i in range(len(self.transitions)):
             delete_button = QPushButton("Удалить")
             delete_button.clicked.connect(lambda: self.delete_transition(delete_button))
-
             self.grid_layout.addWidget(delete_button, i + 1, 2)
 
     def fill_empty_row(self, row_ind: int) -> None:
@@ -392,12 +391,11 @@ class BuildingScene(QGraphicsScene):
         self.edges = []
 
 
-class AutomataGraphView(QGraphicsView):
+class BuilderView(QGraphicsView):
     def __init__(self, parent: Optional[QWidget] = None, button_size: int = 40) -> None:
         super().__init__(parent)
         self.scene_ = BuildingScene(self)
         self.setScene(self.scene_)
-        self.setWhatsThis("Это описание данного виджета или кнопки.")
 
         self.overlay_container = OverlayWidget(self)
         self.overlay_container.setContentsMargins(0, 0, 0, 0)
@@ -457,6 +455,10 @@ class AutomataGraphView(QGraphicsView):
             self.zoom_scene(zoom_direction, event.position())
         return super().wheelEvent(event)
 
+    def resizeEvent(self, event: QResizeEvent | None):
+        self.setSceneRect(self.scene_.itemsBoundingRect())
+        super().resizeEvent(event)
+
     def zoom_scene(
         self, zoom_direction: bool, pos: QPointF, zoom_in_factor: float = 1.25
     ) -> None:
@@ -499,12 +501,12 @@ class AutomataGraphView(QGraphicsView):
             self,
             "Сохранить файл",
             DATA_DIR,
-            initialFilter=f"Файлы (*.{AUTOMATA_EXT})",
+            f"Файлы (*.{AUTOMATA_EXT});;All Files (*)",
         )
         if not file_path:
             return
-
-        if utiles.json_to_file(self.scene_.serialize(), DATA_DIR, VIEW_FILE_NAME):
+        path, filename = os.path.split(file_path)
+        if utiles.json_to_file(self.scene_.serialize(), path, filename):
             QMessageBox.information(self, "Notification", "saved")
             return
 
@@ -512,7 +514,10 @@ class AutomataGraphView(QGraphicsView):
 
     def load_view(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Выберите файл", DATA_DIR, initialFilter=f"Файлы (*.{AUTOMATA_EXT})"
+            self,
+            "Выберите файл",
+            DATA_DIR,
+            f"Файлы (*.{AUTOMATA_EXT});;All Files (*)",
         )
         if not file_path:
             return
@@ -533,7 +538,7 @@ class AutomataGraphView(QGraphicsView):
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save File",
-            start_path,  # starting directory or filename
+            start_path,
             "Text Files (*.svg);;All Files (*)",  # file filters
         )
         if not file_path:

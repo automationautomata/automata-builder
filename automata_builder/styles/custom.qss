@@ -9,17 +9,17 @@ QTabBar::close-button:hover {
 }
 
 /*QGraphicsView*/
-AutomataGraphView {
+BuilderView {
     background-color: white; /* Общий белый фон */
     border: 0.5px solid #363232; /* Убираем рамку */
     margin: 4px;
 }
 
-AutomataGraphView::viewport {
+BuilderView::viewport {
     background: white; /* Белый фон для области просмотра */
 }
 
-AutomataGraphView > QWidget > QPushButton {
+BuilderView > QWidget > QPushButton {
     background-color: #ffffff;
     padding: 2px 5px 2px 5px;
     font-size: 8pt;

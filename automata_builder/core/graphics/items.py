@@ -1,6 +1,6 @@
 import copy
 import math
-from typing import Any
+from typing import Any, Optional
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import *
@@ -24,9 +24,9 @@ class Node(QGraphicsEllipseItem):
         self.setBrush(QBrush(self.COLOR))
         self.setPen(QPen(Qt.GlobalColor.black))
         self.setFlag(
-            QGraphicsEllipseItem.GraphicsItemFlag.ItemIsMovable
-            | QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
-            | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
+            self.GraphicsItemFlag.ItemIsMovable
+            | self.GraphicsItemFlag.ItemIsSelectable
+            | self.GraphicsItemFlag.ItemSendsScenePositionChanges
         )
         self.setPos(x, y)
 
@@ -115,18 +115,18 @@ class Edge(QGraphicsPathItem):
         self.is_reversed = self.destination.name in self.source.in_edges
         self.setPen(QPen(self.BASIC_COLOR, 2))
         self.setFlag(
-            QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable
-            | QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
+            self.GraphicsItemFlag.ItemIsSelectable
+            | self.GraphicsItemFlag.ItemSendsScenePositionChanges
         )
 
         self.text_item: EditableTextItem = None
         self.arrow_head: QGraphicsPolygonItem = None
 
-        self.arrow_size = 10
-        self.bend_ratio = 0.5  # значение от 0 до 1, где 0 — у source, 1 — у destination
-        self.bend_offset = 5.0
-        self.click_area_size = click_area_size
-        self.dragging_control_point = False
+        self.arrow_size_ = 10
+        self.bend_ratio_ = 0.5  # from 0 to 1, 0 — source, 1 — destination
+        self.bend_offset_ = 5.0
+        self.click_area_size_ = click_area_size
+        self.dragging_control_point_ = False
 
     def isloop(self):
         return self.destination is self.source
@@ -182,10 +182,15 @@ class Edge(QGraphicsPathItem):
         original_path = super().shape()
         stroker = QPainterPathStroker()
         # ширина с обеих сторон
-        stroker.setWidth(self.click_area_size * 2)
+        stroker.setWidth(self.click_area_size_ * 2)
         expanded_path = stroker.createStroke(original_path)
         # Создаем новую область с шириной 'width' вокруг исходного пути
         return expanded_path
+
+    def paint(self, painter, option, widget=None):
+        # Переопределяем метод рисования
+        option.state &= ~QStyle.StateFlag.State_Selected
+        super().paint(painter, option, widget)
 
     def itemChange(self, change: QGraphicsItem.GraphicsItemChange, value: Any) -> Any:
         if change == self.GraphicsItemChange.ItemSelectedHasChanged:
@@ -197,14 +202,14 @@ class Edge(QGraphicsPathItem):
             self.setPen(pen)
         return super().itemChange(change, value)
 
-    def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent | None) -> None:
+    def mouseDoubleClickEvent(self, event: Optional[QGraphicsSceneMouseEvent]) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
-            self.dragging_control_point = True
+            self.dragging_control_point_ = True
         return super().mousePressEvent(event)
 
-    def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent | None):
-        if self.dragging_control_point:
-            # Обновляем bend_ratio в зависимости от положения мыши относительно линии
+    def mouseMoveEvent(self, event: Optional[QGraphicsSceneMouseEvent]):
+        if self.dragging_control_point_:
+            # Обновляем bend_ratio_ в зависимости от положения мыши относительно линии
             source_point = self.get_boundary_point(self.source, self.destination)
             dest_point = self.get_boundary_point(self.destination, self.source)
 
@@ -224,28 +229,28 @@ class Edge(QGraphicsPathItem):
 
             # Ограничиваем ratio между 0 и 1
             ratio_along_line_clamped = 1.0 - max(0.0, min(1.0, ratio_along_line))
-            self.bend_ratio = ratio_along_line_clamped
+            self.bend_ratio_ = ratio_along_line_clamped
 
-            # Расчет нового bend_offset как расстояния от точки до линии вдоль перпендикуляра
-            mid_point_new = source_point + line_vec * self.bend_ratio
+            # Расчет нового bend_offset_ как расстояния от точки до линии вдоль перпендикуляра
+            mid_point_new = source_point + line_vec * self.bend_ratio_
             perp_vector = QPointF(-line_vec.y(), line_vec.x()) / total_length
 
             # Проекция точки на линию для определения offset
             vec_to_click_new = click_pos - mid_point_new
-            bend_offset_new = (
+            bend_offset__new = (
                 QVector2D(vec_to_click_new).toPointF().x() * perp_vector.x()
                 + QVector2D(vec_to_click_new).toPointF().y() * perp_vector.y()
             )
 
             # Можно ограничить или оставить без ограничений
-            self.bend_offset = bend_offset_new
+            self.bend_offset_ = bend_offset__new
             # Обновляем путь с новым изгибом
             self.update_path()
 
         return super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent | None):
-        self.dragging_control_point = False
+    def mouseReleaseEvent(self, event: Optional[QGraphicsSceneMouseEvent]):
+        self.dragging_control_point_ = False
         return super().mouseReleaseEvent(event)
 
     def update_path(self) -> None:
@@ -265,7 +270,7 @@ class Edge(QGraphicsPathItem):
             source_point = self.get_boundary_point(self.source, self.destination)
             dest_point = self.get_boundary_point(self.destination, self.source)
             control_point = self.get_control_point(
-                source_point, dest_point, self.bend_ratio, self.bend_offset
+                source_point, dest_point, self.bend_ratio_, self.bend_offset_
             )
             path.moveTo(source_point)
             path.quadTo(control_point, dest_point)
@@ -278,8 +283,8 @@ class Edge(QGraphicsPathItem):
     def get_control_point(
         dest_point: QPointF,
         source_point: QPointF,
-        bend_ratio: float,
-        bend_offset: float,
+        bend_ratio_: float,
+        bend_offset_: float,
     ) -> QPointF:
         line_vec = dest_point - source_point
         length = math.hypot(line_vec.x(), line_vec.y())
@@ -287,14 +292,14 @@ class Edge(QGraphicsPathItem):
         if length == 0:
             return source_point
 
-        # Точка на линии по bend_ratio
-        bend_point = source_point + line_vec * bend_ratio
+        # Точка на линии по bend_ratio_
+        bend_point = source_point + line_vec * bend_ratio_
 
         # Перпендикуляр к линии
         perp = QPointF(line_vec.y(), -line_vec.x()) / length
 
-        # Смещение по перпендикуляру на bend_offset
-        return bend_point + perp * bend_offset
+        # Смещение по перпендикуляру на bend_offset_
+        return bend_point + perp * bend_offset_
 
     @staticmethod
     def get_boundary_point(source: Node, destination: Node) -> QPointF:
@@ -327,15 +332,9 @@ class Edge(QGraphicsPathItem):
     def draw_edge_text(self) -> None:
         if not self.text_item:
             self.text_item = EditableTextItem(self.edge_text, self)
-            self.text_item.setFlag(
-                QGraphicsEllipseItem.GraphicsItemFlag.ItemSendsScenePositionChanges
-            )
-            self.text_item.setFlag(
-                QGraphicsEllipseItem.GraphicsItemFlag.ItemIsSelectable, False
-            )
-            self.text_item.setFlag(
-                QGraphicsEllipseItem.GraphicsItemFlag.ItemIsFocusable, False
-            )
+            self.text_item.setFlag(self.GraphicsItemFlag.ItemSendsScenePositionChanges)
+            self.text_item.setFlag(self.GraphicsItemFlag.ItemIsSelectable, False)
+            self.text_item.setFlag(self.GraphicsItemFlag.ItemIsFocusable, False)
             self.text_item.setDefaultTextColor(Qt.GlobalColor.red)
             self.text_item.setFont(self.TEXT_FONT)
             self.text_item.setPlainText(self.edge_text)
@@ -346,11 +345,22 @@ class Edge(QGraphicsPathItem):
         if self.isloop():
             bend_point = self.path().pointAtPercent(0.5)
         else:
-            ratio = max(0.25, min(self.bend_ratio, 0.75))
+            ratio = max(0.25, min(self.bend_ratio_, 0.75))
             bend_point = self.path().pointAtPercent(1 - ratio)
 
-        offset_coords = QPointF(0, -25)
-        self.text_item.setPos(bend_point + offset_coords)
+        line_vec = self.path().pointAtPercent(0.75) - self.path().pointAtPercent(0.25)
+        line_length = math.hypot(line_vec.x(), line_vec.y())
+
+        if line_length <= 0:
+            return
+        unit_vector = QPointF(line_vec.x() / line_length, line_vec.y() / line_length)
+        perp_vector = QPointF(-unit_vector.y(), unit_vector.x())
+
+        perp_offset = 10 if not self.isloop() else 22
+        self.text_item.setPos(bend_point + perp_vector * perp_offset)
+
+        angle = math.degrees(math.atan2(unit_vector.y(), unit_vector.x())) % 2 * math.pi
+        self.text_item.setRotation(angle)
 
     def draw_arrowhead(self) -> None:
         # Удаляем старый стрелочный элемент, если есть
@@ -369,7 +379,7 @@ class Edge(QGraphicsPathItem):
 
         # Получаем точку чуть перед конца для определения направления стрелки
         # Можно взять чуть назад по линии для определения направления стрелки
-        tail_percent = max(0.0, 1.0 - self.arrow_size / path_length)
+        tail_percent = max(0.0, 1.0 - self.arrow_size_ / path_length)
         start_arrow_point = self.path().pointAtPercent(tail_percent)
 
         # Вектор направления стрелки (от start к end)
@@ -392,13 +402,13 @@ class Edge(QGraphicsPathItem):
         point1 = end_point
         point2 = (
             end_point
-            - unit_vector * self.arrow_size
-            + perp_vector * (self.arrow_size / 2)
+            - unit_vector * self.arrow_size_
+            + perp_vector * (self.arrow_size_ / 2)
         )
         point3 = (
             end_point
-            - unit_vector * self.arrow_size
-            - perp_vector * (self.arrow_size / 2)
+            - unit_vector * self.arrow_size_
+            - perp_vector * (self.arrow_size_ / 2)
         )
 
         arrow_polygon = QPolygonF([point1, point2, point3])
@@ -415,8 +425,8 @@ class Edge(QGraphicsPathItem):
             "source": self.source.name,
             "destination": self.destination.name,
             "transitions": self.transitions,
-            "bend_ratio": self.bend_ratio,
-            "bend_offset": self.bend_offset,
+            "bend_ratio": self.bend_ratio_,
+            "bend_offset": self.bend_offset_,
         }
 
     @staticmethod
@@ -426,8 +436,8 @@ class Edge(QGraphicsPathItem):
         transitions = data["transitions"]
 
         edge = Edge("", "", source, dest)
-        edge.bend_ratio = data["bend_ratio"]
-        edge.bend_offset = data["bend_offset"]
+        edge.bend_ratio_ = data["bend_ratio"]
+        edge.bend_offset_ = data["bend_offset"]
         edge.transitions = copy.deepcopy(transitions)
         source.out_edges[dest.name] = edge
         dest.in_edges[source.name] = edge

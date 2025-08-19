@@ -8,9 +8,14 @@ from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
 from PyQt6.QtWidgets import *
 
 from ..automata import Automata
-from ..graphics.view import AutomataGraphView
+from ..graphics.view import BuilderView
 from ..tab.components import *
-from ..utiles.widgets import OverlayWidget, VerticalMessagesWidget
+from ..utiles.widgets import (
+    FilteredLineEdit,
+    FilteredTextEdit,
+    OverlayWidget,
+    VerticalMessagesWidget,
+)
 
 
 class AlphabetEdit(QTextEdit):
@@ -25,7 +30,7 @@ class AlphabetEdit(QTextEdit):
 
         cursor = self.textCursor()
         pos = cursor.position()
-        cur = text[pos - 1] if pos != 0 else pos
+        cur = text[pos - 1] if pos != 0 else ""
         new_pos = pos
 
         is_adding = len(text) > len(self.prev_text)
@@ -48,16 +53,17 @@ class AlphabetEdit(QTextEdit):
                 text = f"{text[: pos - 1]}, {text[pos:]}"
             elif cur == "," and is_adding:
                 text = f"{text[:pos]} {text[pos:]}"
-                pos + 1
-            text = text[2:-2]
+                # pos + 1
 
-            if is_adding:
-                symbols = [s.strip() for s in text.split(",") if s]
-                new_pos = pos + 1 if is_insert else pos
-            else:
-                symbols = [s.strip() for s in text.split(",") if s.strip()]
+            inner_text = text[2:-2]
+            symbols = [s.strip() for s in inner_text.split(",") if s]
 
-            text = "{ " + ", ".join(dict.fromkeys(symbols)) + " }"
+            if not is_adding:
+                symbols = [s for s in symbols if s.strip()]
+
+            unique = dict.fromkeys(symbols)
+            text = "{ " + ", ".join(unique) + " }"
+            new_pos = pos + 1 if is_insert and is_adding else pos
 
         self.blockSignals(True)
         self.setText(text)
@@ -83,6 +89,7 @@ class AlphabetEdit(QTextEdit):
 class ParametersPanel(QWidget):
     def __init__(
         self,
+        word_input_condition: Callable[[], None],
         parent: Optional[QWidget] = None,
         alphabet_item_height: int = 50,
         initial_state_height: int = 40,
@@ -94,20 +101,21 @@ class ParametersPanel(QWidget):
         self.output_alphabet_field = AlphabetEdit(parent=self)
         self.output_alphabet_field.setMinimumHeight(alphabet_item_height)
 
-        self.initial_state_field = QTextEdit(self)
+        self.initial_state_field = FilteredTextEdit(self.state_input_condition)
         self.initial_state_field.setMinimumHeight(initial_state_height)
         self.initial_state_field.setPlaceholderText("initial state")
-        self.initial_state_field.textChanged.connect(self.filter_state_input)
 
         self.verify_button = QPushButton("Verify")
         self.draw_button = QPushButton("Draw")
 
-        self.prefix_field = QTextEdit(self)
+        self.last_state_field = FilteredTextEdit(self.state_input_condition)
+        self.last_state_field.setPlaceholderText("last state")
+
+        self.prefix_field = FilteredTextEdit(word_input_condition)
         self.prefix_field.setPlaceholderText("prefix")
 
-        self.last_state_field = QTextEdit(self)
-        self.last_state_field.setPlaceholderText("last state")
-        self.last_state_field.textChanged.connect(self.filter_state_input)
+        self.suffix_field = FilteredTextEdit(word_input_condition)
+        self.suffix_field.setPlaceholderText("suffix")
 
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -129,27 +137,21 @@ class ParametersPanel(QWidget):
 
         layout.addSpacing(initial_state_height // 3)
         layout.addWidget(self.last_state_field)
+
         layout.addSpacing(initial_state_height // 3)
         layout.addWidget(self.prefix_field)
+
+        layout.addSpacing(initial_state_height // 3)
+        layout.addWidget(self.suffix_field)
+
         layout.addSpacing(initial_state_height // 3)
         layout.addWidget(self.draw_button)
 
         self.setLayout(layout)
 
-    def filter_state_input(self) -> None:
-        text_edit = self.initial_state_field
-        text = text_edit.toPlainText()
+    def state_input_condition(self, text) -> None:
         filtered_text = "".join(s for s in text if s not in "\r\t\n ")
-        if filtered_text == text:
-            return
-
-        text_edit.blockSignals(True)
-        text_edit.setText(filtered_text)
-        text_edit.blockSignals(False)
-
-        cursor = text_edit.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        text_edit.setTextCursor(cursor)
+        return filtered_text == text
 
     def input_alphabet(self) -> list[str]:
         return self.input_alphabet_field.alphabet()
@@ -163,8 +165,16 @@ class ParametersPanel(QWidget):
     def prefix(self) -> str:
         return self.prefix_field.toPlainText()
 
+    def suffix(self) -> str:
+        return self.suffix_field.toPlainText()
+
     def last_state(self) -> str:
         return self.last_state_field.toPlainText()
+
+    def set_draw_filters(self, prefix: str, suffix: str, last_state: str) -> None:
+        self.prefix_field.set_text(prefix)
+        self.suffix_field.set_text(suffix)
+        self.last_state_field.setText(last_state)
 
     def set_data(
         self, input_alphabet: list[str], output_alphabet: list[str], initial_state: str
@@ -338,17 +348,22 @@ class SidePanel(QWidget):
 
 
 class WordProcessing(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self,
+        input_word_condition: Callable[[str], bool],
+        output_word_condition: Callable[[str], bool],
+        parent: Optional[QWidget] = None,
+    ) -> None:
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-        self.input_word_edit = QLineEdit()
+        self.input_word_edit = FilteredLineEdit(input_word_condition)
         self.input_word_edit.setPlaceholderText("Input word")
         self.input_word_edit.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
 
-        self.output_word_edit = QLineEdit()
+        self.output_word_edit = FilteredLineEdit(output_word_condition)
         self.output_word_edit.setPlaceholderText("Output word")
         self.output_word_edit.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
@@ -455,7 +470,7 @@ class AutomataContainer(QWidget):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
-        self.view = AutomataGraphView()
+        self.view = BuilderView()
         self.view.fitInView(
             QRectF(0, 0, self.height() * 0.9, self.width() * 0.9),
             Qt.AspectRatioMode.KeepAspectRatio,
@@ -464,16 +479,15 @@ class AutomataContainer(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
 
-        self.word_processing = WordProcessing()
+        self.word_processing = WordProcessing(self.filter_input, lambda _: True)
         self.word_processing.setMinimumHeight(self.height() // 6)
         self.word_processing.setMaximumWidth(self.width())
         self.word_processing.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        self.word_processing.input_word_edit.textChanged.connect(self.filter_input)
         self.word_processing.forward_button.clicked.connect(self.forward_click)
         self.word_processing.backword_button.clicked.connect(self.backward_click)
-        self.word_processing.clear_button.clicked.connect(self.backward_click)
+        self.word_processing.clear_button.clicked.connect(self.clear_click)
 
         layout = QVBoxLayout()
         layout.addWidget(self.view)
@@ -526,22 +540,19 @@ class AutomataContainer(QWidget):
         outputs_table = self.view.get_outputs_table()
         return initial_state, transitions_table, outputs_table
 
-    def filter_input(self) -> None:
-        word = self.word_processing.input_word
+    def filter_input(self, word: str) -> None:
         automata, errors = self.automata()
         if not automata:
             if self.automata_errors_handler:
                 self.automata_errors_handler(errors)
-            return
+            return False
 
-        input_alphabet = self.automata().input_alphabet
-        if all(s in input_alphabet for s in word):
-            self.prev_input_word = word
-            return
-        self.word_processing.blockSignals(True)
-        self.word_processing.input_word = self.prev_input_word
-        self.word_processing.blockSignals(False)
+        input_alphabet = automata.inputs
+        if set(input_alphabet).issuperset(word):
+            return True
+
         QMessageBox.warning(self, "Error", "Invalid input symbol")
+        return False
 
     def forward_click(self) -> None:
         if not (self.word_processing.input_word and self.automata_errors_handler):
@@ -561,9 +572,10 @@ class AutomataContainer(QWidget):
         n = len(output_word)
         if n == 0:
             self.transitions_history.clear()
-            self.transitions_history.append(automata.initial_state)
+            cur_state = automata.initial_state
+        else:
+            cur_state = self.transitions_history[-1]
 
-        cur_state = self.transitions_history[-1]
         cur_symb = input_word[n]
         new_state, out_ = automata.transition(cur_symb, cur_state)
 
@@ -608,6 +620,9 @@ class AutomataContainer(QWidget):
     def clear_click(self):
         self.word_processing.input_word = ""
         self.word_processing.output_word = ""
+        if len(self.transitions_history) != 0:
+            state = self.transitions_history[-1]
+            self.view.unmark_node(state)
         self.transitions_history.clear()
 
     def is_empty_scene(self):
