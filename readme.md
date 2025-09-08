@@ -17,6 +17,6 @@
 
 #### Examples
 
-![example](images/image_points_filter.png)
+![example](images/filter.png)
 
 ![example](images/transitions.png)

@@ -1,25 +1,28 @@
 import enum
 from typing import Callable, Optional
 
+import PyQt6.QtCore as qtc
+import PyQt6.QtWidgets as qtw
+from attr import dataclass
+from core import parser
+from core.automata import Automata
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
-from PyQt6.QtCore import *
 from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
-from PyQt6.QtWidgets import *
 
-from ..automata import Automata
-from ..graphics.view import BuilderView
-from ..tab.components import *
-from ..utiles.widgets import (
+from automata_builder.core import compute
+from automata_builder.ui.common import (
     FilteredLineEdit,
     FilteredTextEdit,
     OverlayWidget,
     VerticalMessagesWidget,
 )
+from automata_builder.ui.graphics.view import BuilderView
+from automata_builder.ui.tab.components import *
 
 
-class AlphabetEdit(QTextEdit):
-    def __init__(self, text: str = "", parent: Optional[QWidget] = None) -> None:
+class AlphabetEdit(qtw.QTextEdit):
+    def __init__(self, text: str = "", parent: Optional[qtw.QWidget] = None) -> None:
         super().__init__(text, parent)
         self.textChanged.connect(self.format_text)
         self.setPlaceholderText("{0, 1, 2, 3}")
@@ -35,7 +38,7 @@ class AlphabetEdit(QTextEdit):
 
         is_adding = len(text) > len(self.prev_text)
 
-        if cur in {"\n", "\t", "\r", "{", "}"}:
+        if cur in {"\n", "\t", "\r", "{", "}"} and is_adding:
             text = text.replace(cur, "")
             new_pos = pos - 1
 
@@ -86,13 +89,13 @@ class AlphabetEdit(QTextEdit):
         self.blockSignals(False)
 
 
-class ParametersPanel(QWidget):
+class Parameters(qtw.QWidget):
     def __init__(
         self,
         word_input_condition: Callable[[], None],
-        parent: Optional[QWidget] = None,
+        parent: Optional[qtw.QWidget] = None,
         alphabet_item_height: int = 50,
-        initial_state_height: int = 40,
+        spacing_height: int = 10,
     ) -> None:
         super().__init__(parent)
         self.input_alphabet_field = AlphabetEdit(parent=self)
@@ -101,51 +104,50 @@ class ParametersPanel(QWidget):
         self.output_alphabet_field = AlphabetEdit(parent=self)
         self.output_alphabet_field.setMinimumHeight(alphabet_item_height)
 
-        self.initial_state_field = FilteredTextEdit(self.state_input_condition)
-        self.initial_state_field.setMinimumHeight(initial_state_height)
+        self.initial_state_field = FilteredLineEdit(self.state_input_condition)
         self.initial_state_field.setPlaceholderText("initial state")
 
-        self.verify_button = QPushButton("Verify")
-        self.draw_button = QPushButton("Draw")
+        self.verify_button = qtw.QPushButton("Verify")
 
-        self.last_state_field = FilteredTextEdit(self.state_input_condition)
+        self.last_state_field = FilteredLineEdit(self.state_input_condition)
         self.last_state_field.setPlaceholderText("last state")
 
-        self.prefix_field = FilteredTextEdit(word_input_condition)
+        self.prefix_field = FilteredLineEdit(word_input_condition)
         self.prefix_field.setPlaceholderText("prefix")
 
-        self.suffix_field = FilteredTextEdit(word_input_condition)
+        self.suffix_field = FilteredLineEdit(word_input_condition)
         self.suffix_field.setPlaceholderText("suffix")
 
-        layout = QVBoxLayout()
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.draw_button = qtw.QPushButton("Draw")
+        self.draw_curves_button = qtw.QPushButton("Draw curves")
+        self.draw_curves_button.setVisible(False)
+        layout = qtw.QVBoxLayout()
+        layout.setAlignment(qtc.Qt.AlignmentFlag.AlignTop)
 
-        layout.setSpacing(4)
-        layout.addWidget(QLabel("Input alphabet"))
+        layout.addWidget(qtw.QLabel("Input alphabet"))
         layout.addWidget(self.input_alphabet_field)
 
-        layout.addSpacing(alphabet_item_height // 3)
-        layout.addWidget(QLabel("Output alphabet"))
+        layout.addSpacing(alphabet_item_height // 5)
+        layout.addWidget(qtw.QLabel("Output alphabet"))
         layout.addWidget(self.output_alphabet_field)
 
-        layout.addSpacing(alphabet_item_height // 3)
-        layout.addWidget(QLabel("Initial state"))
+        layout.addSpacing(alphabet_item_height // 5)
+        layout.addWidget(qtw.QLabel("Initial state"))
         layout.addWidget(self.initial_state_field)
 
-        layout.addSpacing(initial_state_height // 3)
+        layout.addSpacing(alphabet_item_height // 5)
         layout.addWidget(self.verify_button)
 
-        layout.addSpacing(initial_state_height // 3)
-        layout.addWidget(self.last_state_field)
+        filters_layout = qtw.QVBoxLayout()
+        filters_layout.setSpacing(spacing_height)
 
-        layout.addSpacing(initial_state_height // 3)
-        layout.addWidget(self.prefix_field)
+        filters_layout.addWidget(self.last_state_field)
+        filters_layout.addWidget(self.prefix_field)
+        filters_layout.addWidget(self.suffix_field)
+        filters_layout.addWidget(self.draw_button)
 
-        layout.addSpacing(initial_state_height // 3)
-        layout.addWidget(self.suffix_field)
-
-        layout.addSpacing(initial_state_height // 3)
-        layout.addWidget(self.draw_button)
+        layout.addLayout(filters_layout)
+        layout.addWidget(self.draw_curves_button)
 
         self.setLayout(layout)
 
@@ -160,23 +162,23 @@ class ParametersPanel(QWidget):
         return self.output_alphabet_field.alphabet()
 
     def initial_state(self) -> str:
-        return self.initial_state_field.toPlainText()
+        return self.initial_state_field.text()
 
     def prefix(self) -> str:
-        return self.prefix_field.toPlainText()
+        return self.prefix_field.text()
 
     def suffix(self) -> str:
-        return self.suffix_field.toPlainText()
+        return self.suffix_field.text()
 
     def last_state(self) -> str:
-        return self.last_state_field.toPlainText()
+        return self.last_state_field.text()
 
-    def set_draw_filters(self, prefix: str, suffix: str, last_state: str) -> None:
+    def load_draw_filters(self, prefix: str, suffix: str, last_state: str) -> None:
         self.prefix_field.set_text(prefix)
         self.suffix_field.set_text(suffix)
         self.last_state_field.setText(last_state)
 
-    def set_data(
+    def load_data(
         self, input_alphabet: list[str], output_alphabet: list[str], initial_state: str
     ) -> None:
         self.input_alphabet_field.set_alphabet(input_alphabet)
@@ -187,76 +189,71 @@ class ParametersPanel(QWidget):
         return self.input_alphabet() or self.output_alphabet() or self.initial_state()
 
 
-class PlotWidget(QWidget):
-    def __init__(self, parent: Optional[QWidget] = None):
+@dataclass
+class Points:
+    x: list[int]
+    y: list[int]
+    xlim: Optional[tuple[int, int]]
+    ylim: Optional[tuple[int, int]]
+    is_plot: bool = False
+    color: str = "red"
+
+
+class PlotWidget(qtw.QWidget):
+    def __init__(self, parent: Optional[qtw.QWidget] = None):
         super().__init__(parent)
         fig = Figure(figsize=(5, 5))
         self.canvas = FigureCanvasQTAgg(fig)
         self.toolbar = NavigationToolbar2QT(self.canvas, self)
         self.ax = self.canvas.figure.add_subplot(111)
 
-        layout = QVBoxLayout()
+        layout = qtw.QVBoxLayout()
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 
-    def draw(
-        self,
-        x: list[int],
-        y: list[int],
-        xlim: Optional[tuple[int, int]] = None,
-        ylim: Optional[tuple[int, int]] = None,
-        title: str = "",
-    ) -> None:
+    def draw(self, *points: Points, title: str = "") -> None:
         shift = 0.2
         self.ax.clear()
-        self.ax.grid(False)
-        self.ax.set_title(title)
-        self.ax.scatter(x, y, color="red", s=5)
+        compute.draw(self.ax, *points, border_shift=shift, title=title, grid=True)
 
-        if xlim is not None:
-            self.ax.set_xlim(xmin=xlim[0] - shift, xmax=xlim[1] + shift)
-        if ylim is not None:
-            self.ax.set_ylim(ymin=ylim[0] - shift, ymax=ylim[1] + shift)
-
-        self.ax.grid(True)
         self.canvas.draw()
 
 
-class SidePanel(QWidget):
+class SidePanel(qtw.QWidget):
     class Mode(enum.Enum):
         ERROR_MESSAGES = enum.auto()
         PLOT = enum.auto()
         EMPTY = enum.auto()
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: Optional[qtw.QWidget] = None) -> None:
         super().__init__(parent)
         self.cur_mode_ = self.Mode.EMPTY
 
-        self.container = QWidget(self)
+        self.container = qtw.QWidget(self)
         self.container.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Expanding
         )
 
         self.error_messages = VerticalMessagesWidget()
         self.error_messages.setContentsMargins(0, 0, 0, 0)
         self.error_messages.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Expanding
         )
 
         self.plot = PlotWidget()
         self.plot.setContentsMargins(0, 0, 0, 0)
         self.plot.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Expanding
         )
 
-        self.stack_layout = QStackedLayout()
+        self.stack_layout = qtw.QStackedLayout()
         self.stack_layout.addWidget(self.error_messages)
         self.stack_layout.addWidget(self.plot)
 
-        self.close_button = QPushButton(">>")
+        self.close_button = qtw.QPushButton(">>")
 
-        self.main_layout = QVBoxLayout(self.container)
+        self.main_layout = qtw.QVBoxLayout(self.container)
         self.main_layout.addLayout(self.stack_layout)
         self.main_layout.addWidget(self.close_button)
 
@@ -277,7 +274,7 @@ class SidePanel(QWidget):
 
         elif mode == self.Mode.PLOT:
             self.stack_layout.setCurrentWidget(self.plot)
-            self.cur_mode_ = self.Mode.ERROR_MESSAGES
+            self.cur_mode_ = self.Mode.PLOT
 
         elif mode == self.Mode.EMPTY:
             self.stack_layout.setCurrentWidget(None)
@@ -287,7 +284,7 @@ class SidePanel(QWidget):
         if self.current_mode != self.Mode.ERROR_MESSAGES:
             raise Exception("Error messages widget doesn't set")
 
-        group = QSequentialAnimationGroup(self.error_messages)
+        group = qtc.QSequentialAnimationGroup(self.error_messages)
 
         pause = 120
         for msg in messages:
@@ -295,41 +292,38 @@ class SidePanel(QWidget):
             last = self.error_messages.count() - 1
             label = self.error_messages.get_message(last)
 
-            opacity_effect = QGraphicsOpacityEffect(label)
+            opacity_effect = qtw.QGraphicsOpacityEffect(label)
             opacity_effect.setOpacity(0)
             label.setGraphicsEffect(opacity_effect)
 
-            animation = QPropertyAnimation(
+            animation = qtc.QPropertyAnimation(
                 opacity_effect, b"opacity", self.error_messages
             )
             animation.setDuration(400)
             animation.setStartValue(0)
             animation.setEndValue(1)
-            animation.setEasingCurve(QEasingCurve.Type.InOutQuad)
+            animation.setEasingCurve(qtc.QEasingCurve.Type.InOutQuad)
 
             group.addAnimation(animation)
             group.addPause(pause)
 
-        group.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
+        group.start(qtc.QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
     def clear_messages(self) -> None:
         if self.current_mode != self.Mode.ERROR_MESSAGES:
             raise Exception("Error messages widget doesn't set")
         self.error_messages.clear()
 
-    def draw_plot(
-        self,
-        x: list[int],
-        y: list[int],
-        xlim: Optional[tuple[int, int]] = None,
-        ylim: Optional[tuple[int, int]] = None,
-    ) -> None:
+    def draw_plot(self, *points: Points) -> None:
         # xlim = xmin, xmax
         # ylim = ymin, ymax
-        if self.current_mode != self.Mode.ERROR_MESSAGES:
+        if self.current_mode not in (self.Mode.EMPTY, self.Mode.PLOT):
             raise Exception("Plot widget doesn't set")
 
-        self.plot.draw(x, y, xlim, ylim)
+        if self.current_mode == self.Mode.EMPTY:
+            self.set_mode(self.Mode.PLOT)
+
+        self.plot.draw(*points)
 
     def switch_to_plot(self) -> None:
         if self.current_mode == self.Mode.PLOT:
@@ -347,54 +341,56 @@ class SidePanel(QWidget):
         self.set_mode(self.Mode.EMPTY)
 
 
-class WordProcessing(QWidget):
+class WordProcessing(qtw.QWidget):
     def __init__(
         self,
         input_word_condition: Callable[[str], bool],
         output_word_condition: Callable[[str], bool],
-        parent: Optional[QWidget] = None,
+        parent: Optional[qtw.QWidget] = None,
     ) -> None:
         super().__init__(parent)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setSizePolicy(
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Preferred
+        )
 
         self.input_word_edit = FilteredLineEdit(input_word_condition)
         self.input_word_edit.setPlaceholderText("Input word")
         self.input_word_edit.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Preferred
         )
 
         self.output_word_edit = FilteredLineEdit(output_word_condition)
         self.output_word_edit.setPlaceholderText("Output word")
         self.output_word_edit.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Preferred
         )
 
-        layout = QVBoxLayout()
+        layout = qtw.QVBoxLayout()
         layout.addWidget(self.input_word_edit)
         layout.addWidget(self.output_word_edit)
 
-        self.forward_button = QPushButton(text=">")
+        self.forward_button = qtw.QPushButton(text=">")
         self.forward_button.setContentsMargins(0, 0, 0, 0)
 
-        self.backword_button = QPushButton(text="<")
+        self.backword_button = qtw.QPushButton(text="<")
         self.backword_button.setContentsMargins(0, 0, 0, 0)
 
-        buttons_layout = QHBoxLayout()
+        buttons_layout = qtw.QHBoxLayout()
         buttons_layout.setContentsMargins(0, 0, 0, 0)
         buttons_layout.addWidget(self.backword_button)
         buttons_layout.addWidget(self.forward_button)
 
-        self.clear_button = QPushButton(text="clear")
+        self.clear_button = qtw.QPushButton(text="clear")
 
-        processing_layout = QVBoxLayout()
+        processing_layout = qtw.QVBoxLayout()
         processing_layout.setContentsMargins(0, 0, 0, 0)
         processing_layout.addLayout(buttons_layout)
         processing_layout.addWidget(self.clear_button)
 
-        main_layout = QHBoxLayout()
+        main_layout = qtw.QHBoxLayout()
         main_layout.addLayout(layout)
         main_layout.addLayout(processing_layout)
-        main_layout.setAlignment(buttons_layout, Qt.AlignmentFlag.AlignTop)
+        main_layout.setAlignment(buttons_layout, qtc.Qt.AlignmentFlag.AlignTop)
 
         self.setLayout(main_layout)
         self.setContentsMargins(0, 0, 0, 0)
@@ -421,19 +417,19 @@ class WordProcessing(QWidget):
 
 
 class TactCounter(OverlayWidget):
-    def __init__(self, parent: Optional[QWidget] = None):
+    def __init__(self, parent: Optional[qtw.QWidget] = None):
         super().__init__(parent)
         self.value_ = 0
-        self.counter = QLabel("0", self)
+        self.counter = qtw.QLabel("0", self)
         self.counter.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Expanding
         )
 
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.setContextMenuPolicy(qtc.Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.custom_menu)
 
-    def custom_menu(self, point: QPoint):
-        menu = QMenu(self)
+    def custom_menu(self, point: qtc.QPoint):
+        menu = qtw.QMenu(self)
 
         hide_action = QAction("Скрыть")
         hide_action.triggered.connect(lambda: self.setHidden(True))
@@ -462,36 +458,36 @@ class TactCounter(OverlayWidget):
         self.counter.adjustSize()
 
 
-class AutomataContainer(QWidget):
+class AutomataContainer(qtw.QWidget):
     MARKED_COLOR = QColor(128, 0, 0)
 
     def __init__(
         self,
-        parent: Optional[QWidget] = None,
+        parent: Optional[qtw.QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self.view = BuilderView()
         self.view.fitInView(
-            QRectF(0, 0, self.height() * 0.9, self.width() * 0.9),
-            Qt.AspectRatioMode.KeepAspectRatio,
+            qtc.QRectF(0, 0, self.height() * 0.9, self.width() * 0.9),
+            qtc.Qt.AspectRatioMode.KeepAspectRatio,
         )
         self.view.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Expanding
         )
 
         self.word_processing = WordProcessing(self.filter_input, lambda _: True)
         self.word_processing.setMinimumHeight(self.height() // 6)
         self.word_processing.setMaximumWidth(self.width())
         self.word_processing.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Expanding
         )
         self.word_processing.forward_button.clicked.connect(self.forward_click)
         self.word_processing.backword_button.clicked.connect(self.backward_click)
         self.word_processing.clear_button.clicked.connect(self.clear_click)
 
-        layout = QVBoxLayout()
+        layout = qtw.QVBoxLayout()
         layout.addWidget(self.view)
-        layout.addWidget(self.word_processing, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(self.word_processing, 0, qtc.Qt.AlignmentFlag.AlignTop)
         self.setLayout(layout)
 
         # --------------------------------------
@@ -511,7 +507,10 @@ class AutomataContainer(QWidget):
         key = event.key()
         modifier = event.modifiers()
 
-        if key == Qt.Key.Key_S and modifier == Qt.KeyboardModifier.ControlModifier:
+        if (
+            key == qtc.Qt.Key.Key_S
+            and modifier == qtc.Qt.KeyboardModifier.ControlModifier
+        ):
             self.view.save_view()
 
         return super().keyPressEvent(event)
@@ -551,7 +550,7 @@ class AutomataContainer(QWidget):
         if set(input_alphabet).issuperset(word):
             return True
 
-        QMessageBox.warning(self, "Error", "Invalid input symbol")
+        qtw.QMessageBox.warning(self, "Error", "Invalid input symbol")
         return False
 
     def forward_click(self) -> None:
@@ -624,6 +623,74 @@ class AutomataContainer(QWidget):
             state = self.transitions_history[-1]
             self.view.unmark_node(state)
         self.transitions_history.clear()
+        self.tact_counter.setHidden(True)
 
     def is_empty_scene(self):
         return self.view.is_empty()
+
+
+class FunctionInput(qtw.QWidget):
+    VARIABLE_NAME = "x"
+
+    def __init__(self, parent: Optional[qtw.QWidget] = None) -> None:
+        super().__init__(parent)
+
+        self.func_input = FilteredTextEdit(self._filter_condition_)
+        self.func_input.setPlaceholderText("function")
+
+        self.base_input = FilteredLineEdit(lambda text: text.isnumeric() or not text)
+        self.base_input.setPlaceholderText("base")
+        self.base_input.set_text("")
+
+        self.draw_button = qtw.QPushButton("Draw from function")
+
+        self._layout = qtw.QVBoxLayout(self)
+        self._layout.addWidget(self.func_input)
+        self._layout.addWidget(self.base_input)
+        self._layout.addWidget(self.draw_button)
+
+    @staticmethod
+    def _filter_condition_(text: str) -> bool:
+        allowed = set([" ", "(", ")", FunctionInput.VARIABLE_NAME])
+        allowed.update(f"{i}" for i in range(10))
+        allowed.update(parser.allowed_operations())
+        return allowed.issuperset(set(text))
+
+    def get_function(self, base: int) -> Callable[[int], int]:
+        expr = self.func_input.toPlainText()
+        valid_expr = parser.parse_expression(expr, base)
+        return eval(f"lambda x: {valid_expr}")
+
+    def get_function_text(self) -> Callable[[int], int]:
+        return self.func_input.toPlainText()
+
+    def get_base(self) -> int:
+        text = self.base_input.text()
+        return int(text) if len(text) != 0 else 0
+
+    def load(self, func: str, base: int) -> None:
+        self.func_input.set_text(func)
+        self.base_input.set_text(str(base))
+
+
+class LengthInput(qtw.QWidget):
+    def __init__(
+        self, parent: Optional[qtw.QWidget] = None, default_len: int = 12
+    ) -> None:
+        super().__init__(parent)
+        self.default_len = default_len
+
+        self.label = qtw.QLabel(text="Length")
+        self.input_field = FilteredLineEdit(lambda text: text.isnumeric() or not text)
+        self.input_field.setPlaceholderText(f"length (default is {self.default_len})")
+
+        self._layout = qtw.QVBoxLayout(self)
+        self._layout.addWidget(self.label)
+        self._layout.addWidget(self.input_field)
+
+    def get_length(self) -> int:
+        text = self.input_field.text()
+        return int(text) if len(text) != 0 else self.default_len
+
+    def load(self, length: int) -> None:
+        self.input_field.set_text(str(length))

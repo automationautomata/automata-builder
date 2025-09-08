@@ -3,9 +3,7 @@ from typing import Callable, Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import *
-
-from ..lang import getlocale
-from ..utiles.utiles import textfilter
+from automata_builder.utiles import lang, utiles
 
 
 class MultipleInputDialog(QDialog):
@@ -20,8 +18,8 @@ class MultipleInputDialog(QDialog):
         layout = QVBoxLayout()
 
         button_layout = QHBoxLayout()
-        ok_button = QPushButton(getlocale("accept"), self)
-        cancel_button = QPushButton(getlocale("cancel"), self)
+        ok_button = QPushButton(lang.getlocale("accept"), self)
+        cancel_button = QPushButton(lang.getlocale("cancel"), self)
 
         ok_button.clicked.connect(self.accept)
         cancel_button.clicked.connect(self.reject)
@@ -226,7 +224,7 @@ class FilteredTextEdit(QTextEdit):
 
     def set_condition(self, condition: Callable[[str], bool]):
         self.textChanged.connect(
-            textfilter(
+            utiles.textfilter(
                 condition,
                 self.toPlainText,
                 self.set_text,
@@ -253,7 +251,7 @@ class FilteredLineEdit(QLineEdit):
 
     def set_condition(self, condition: Callable[[str], bool]):
         self.textChanged.connect(
-            textfilter(
+            utiles.textfilter(
                 condition,
                 self.text,
                 self.set_text,

@@ -6,11 +6,13 @@ BASE_LANG = "en"
 
 BASE_DIR = dirname(dirname(__file__))
 
-LOCALE_DIR = join(BASE_DIR, "locale")
+RESOURCES_DIR = join(BASE_DIR, "resources")
 
-STYLESHEETS_DIR = join(BASE_DIR, "styles")
+LOCALE_DIR = join(RESOURCES_DIR, "locale")
 
-RESOURCES_DIRS = (join(BASE_DIR, "images"),)
+STYLESHEETS_DIR = join(RESOURCES_DIR, "styles")
+
+IMAGES_DIRS = (join(RESOURCES_DIR, "images"),)
 
 DATA_DIR = join(userpaths.get_my_documents(), "automata builder")
 

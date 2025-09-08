@@ -2,15 +2,15 @@ import signal
 import sys
 
 from PyQt6.QtWidgets import QApplication
-
-from automata_builder.core.utiles import utiles
-from automata_builder.core.window import MainWindow
+from ui.window import MainWindow
+from automata_builder.utiles import utiles
 
 
 def main():
     app = QApplication(sys.argv)
-    # QWhatsThis.enterWhatsThisMode()
+
     stylesheet = utiles.load_stylesheets()
+
     window = MainWindow()
     window.setStyleSheet(stylesheet)
 

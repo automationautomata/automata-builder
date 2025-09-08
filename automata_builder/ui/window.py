@@ -6,10 +6,9 @@ from pathlib import Path
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import *
 
-from . import lang
-from .data import SESSION_EXT, SESSIONS_DIR
-from .tab.tab import AutomataTab
-from .utiles import utiles
+from automata_builder.ui.tab.tab import Tab
+from automata_builder.utiles import lang, utiles
+from automata_builder.utiles.data import SESSION_EXT, SESSIONS_DIR
 
 
 class MainWindow(QWidget):
@@ -48,13 +47,13 @@ class MainWindow(QWidget):
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
 
-        self.tabs: list[AutomataTab] = []
+        self.tabs: list[Tab] = []
 
         if not self.load_last_session():
             self.add_view()
 
     def add_view(self):
-        tab_content = AutomataTab()
+        tab_content = Tab()
         tab_name = f"View {self.tab_widget.count() + 1}"
         self.tab_widget.addTab(tab_content, tab_name)
 
@@ -86,14 +85,18 @@ class MainWindow(QWidget):
         self.tab_widget.removeTab(index)
 
     def save_current_session(self):
-        session_data = []
-        for tab in self.tabs:
-            session_data.append(tab.dump())
+        try:
+            session_data = []
+            for tab in self.tabs:
+                session_data.append(tab.dump())
 
-        fmt_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"{fmt_date}.{SESSION_EXT}"
+            fmt_date = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"{fmt_date}.{SESSION_EXT}"
+            utiles.save_json(session_data, SESSIONS_DIR, filename)
+        except (OSError, IOError):
+            return False
 
-        return utiles.json_to_file(session_data, SESSIONS_DIR, filename)
+        return True
 
     def save_session(self) -> bool:
         if all(tab.is_empty() for tab in self.tabs):
@@ -179,7 +182,7 @@ class MainWindow(QWidget):
 
         return True
 
-    def load_session(self, session_path: str) -> AutomataTab:
+    def load_session(self, session_path: str) -> Tab:
         with open(session_path, mode="r") as session_file:
             session_data = json.loads(session_file.read())
             for data in session_data:

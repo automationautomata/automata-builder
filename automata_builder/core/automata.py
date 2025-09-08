@@ -42,11 +42,11 @@ class Automata:
 
     @property
     def input_alphabet(self) -> list[str]:
-        return list(self.inputs.keys())
+        return sorted(self.inputs, key=lambda x: self.inputs[x])
 
     @property
     def output_alphabet(self) -> list[str]:
-        return list(self.outputs.keys())
+        return sorted(self.outputs, key=lambda x: self.outputs[x])
 
     @property
     def transitions(self) -> Table:
@@ -141,10 +141,17 @@ class Automata:
         _, output = self.__read__(word)
         return output
 
-    def to_number(self, word: str) -> tuple[float, float]:
+    def input_number(self, word: str) -> float:
         n = len(self.inputs) + 1
         number = sum(
             self.inputs[word[-i]] / n ** (i - 1) for i in range(1, len(word) + 1)
+        )
+        return number
+
+    def output_number(self, word: str) -> float:
+        n = len(self.outputs) + 1
+        number = sum(
+            self.outputs[word[-i]] / n ** (i - 1) for i in range(1, len(word) + 1)
         )
         return number
 

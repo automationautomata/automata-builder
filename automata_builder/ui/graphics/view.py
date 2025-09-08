@@ -2,19 +2,19 @@ import json
 import os
 from typing import Optional
 
-from PyQt6.QtCore import QPointF, Qt, QRectF
-from PyQt6.QtGui import *
+import PyQt6.QtGui as qtg
+import PyQt6.QtWidgets as qtw
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtSvg import QSvgGenerator
-from PyQt6.QtWidgets import *
 
-from ..data import AUTOMATA_EXT, DATA_DIR, VIEW_FILE_NAME
-from ..graphics.items import Edge, Node
-from ..utiles import utiles
-from ..utiles.widgets import (
+from automata_builder.ui.common import (
     OverlayWidget,
     TableInputDialog,
     VerticalInputDialog,
 )
+from automata_builder.ui.graphics.items import Edge, Node
+from automata_builder.utiles import utiles
+from automata_builder.utiles.data import AUTOMATA_EXT, DATA_DIR, VIEW_FILE_NAME
 
 
 class EdgeEditDialog(TableInputDialog):
@@ -28,7 +28,7 @@ class EdgeEditDialog(TableInputDialog):
         super().__init__(*row_labels, col_titles=["Вход", "Выход"], title=title)
 
         for i in range(len(self.transitions)):
-            delete_button = QPushButton("Удалить")
+            delete_button = qtw.QPushButton("Удалить")
             delete_button.clicked.connect(lambda: self.delete_transition(delete_button))
             self.grid_layout.addWidget(delete_button, i + 1, 2)
 
@@ -40,7 +40,7 @@ class EdgeEditDialog(TableInputDialog):
             self.grid_layout.removeWidget(widget)
             self.grid_layout.addWidget(widget, i, 0)
 
-    def delete_transition(self, delete_button: QPushButton) -> None:
+    def delete_transition(self, delete_button: qtw.QPushButton) -> None:
         index = self.grid_layout.indexOf(delete_button)
         row_ind, _, _, _ = self.grid_layout.getItemPosition(index)
 
@@ -92,10 +92,10 @@ class EdgeEditDialog(TableInputDialog):
         return values
 
 
-class BuildingScene(QGraphicsScene):
-    INITIAL_STATE_COLOR = QColor(128, 25, 90, 180)
+class BuildingScene(qtw.QGraphicsScene):
+    INITIAL_STATE_COLOR = qtg.QColor(128, 25, 90, 180)
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: Optional[qtw.QWidget] = None) -> None:
         super().__init__(parent)
 
         self.nodes: dict[str, Node] = {}  # словарь имя-узел
@@ -109,7 +109,7 @@ class BuildingScene(QGraphicsScene):
     def marked_nodes(self) -> list[str]:
         return [n.name for n in self.marked_nodes_]
 
-    def keyPressEvent(self, event: QKeyEvent | None) -> None:
+    def keyPressEvent(self, event: qtg.QKeyEvent | None) -> None:
         key = event.key()
         modifier = event.modifiers()
         if key == Qt.Key.Key_Delete:
@@ -128,7 +128,7 @@ class BuildingScene(QGraphicsScene):
 
         return super().keyPressEvent(event)
 
-    def mouseDoubleClickEvent(self, event: QGraphicsSceneMouseEvent | None) -> None:
+    def mouseDoubleClickEvent(self, event: qtw.QGraphicsSceneMouseEvent | None) -> None:
         scene_pos = event.scenePos()
         items = self.items(scene_pos)
         if len(items) == 0:
@@ -139,13 +139,13 @@ class BuildingScene(QGraphicsScene):
             self.nodes[name] = new_node
         return super().mouseDoubleClickEvent(event)
 
-    def contextMenuEvent(self, event: QGraphicsSceneContextMenuEvent) -> None:
+    def contextMenuEvent(self, event: qtw.QGraphicsSceneContextMenuEvent) -> None:
         point = event.scenePos()
         items = self.items(point)
         if len(items) != 1:
             return
         item = items[0]
-        menu = QMenu(self.parent())
+        menu = qtw.QMenu(self.parent())
 
         # Add actions to the menu
         if isinstance(item, Node):
@@ -156,7 +156,7 @@ class BuildingScene(QGraphicsScene):
         # Menu at cursor position
         menu.exec(event.screenPos())
 
-    def node_actions(self, node: Node) -> list[QAction]:
+    def node_actions(self, node: Node) -> list[qtg.QAction]:
         def edit_node():
             dialog = VerticalInputDialog("New name:")
             values = dialog.get_values()
@@ -165,7 +165,7 @@ class BuildingScene(QGraphicsScene):
 
             new_name = values[0]
             if new_name != node.name and new_name in self.nodes:
-                QMessageBox.warning(
+                qtw.QMessageBox.warning(
                     self, "Ошибка", "Узел с таким названием уже существует"
                 )
                 return
@@ -178,24 +178,24 @@ class BuildingScene(QGraphicsScene):
         if len(selected_nodes) > 2:
             return []
 
-        delete_action = QAction("Удалить", self)
+        delete_action = qtg.QAction("Удалить", self)
         delete_action.triggered.connect(lambda: self.delete_node(node))
 
-        edit_action = QAction("Редактировать", self)
+        edit_action = qtg.QAction("Редактировать", self)
         edit_action.triggered.connect(edit_node)
 
         if self.initial_state is node:
-            initial_action = QAction("Сделать обычным", self)
+            initial_action = qtg.QAction("Сделать обычным", self)
             initial_action.triggered.connect(lambda: self.unset_initial_node(node))
         else:
-            initial_action = QAction("Сделать начальным", self)
+            initial_action = qtg.QAction("Сделать начальным", self)
             initial_action.triggered.connect(lambda: self.set_initial_node(node))
 
         actions = [delete_action, edit_action, initial_action]
 
         if len(selected_nodes) == 0 or len(selected_nodes) == 1:
             if not node.has_loop():
-                make_loop_action = QAction("Сделать петлю", self)
+                make_loop_action = qtg.QAction("Сделать петлю", self)
                 make_loop_action.triggered.connect(lambda: self.create_edge(node, node))
                 actions.append(make_loop_action)
             return actions
@@ -204,13 +204,13 @@ class BuildingScene(QGraphicsScene):
             selected_nodes[0] if selected_nodes[0] is not node else selected_nodes[1]
         )
         if src.name not in node.in_edges:
-            add_edge_action = QAction("Соединить", self)
+            add_edge_action = qtg.QAction("Соединить", self)
             add_edge_action.triggered.connect(lambda: self.create_edge(src, node))
             actions.append(add_edge_action)
 
         return actions
 
-    def edge_actions(self, edge: Edge) -> list[QAction]:
+    def edge_actions(self, edge: Edge) -> list[qtg.QAction]:
         def edit_edge():
             dialog = EdgeEditDialog(edge, "Редактирование")
             values = dialog.get_values()
@@ -232,9 +232,9 @@ class BuildingScene(QGraphicsScene):
             in_, out_ = values
             edge.add_transition(out_, in_)
 
-        delete_action = QAction("Удалить", self)
-        edit_action = QAction("Редактировать", self)
-        add_action = QAction("Добавить", self)
+        delete_action = qtg.QAction("Удалить", self)
+        edit_action = qtg.QAction("Редактировать", self)
+        add_action = qtg.QAction("Добавить", self)
 
         delete_action.triggered.connect(lambda: self.delete_edge(edge))
         edit_action.triggered.connect(edit_edge)
@@ -294,13 +294,13 @@ class BuildingScene(QGraphicsScene):
 
     def set_initial_node(self, node: Node) -> Node:
         if self.initial_state:
-            self.initial_state.setBrush(QBrush(node.COLOR))
+            self.initial_state.setBrush(qtg.QBrush(node.COLOR))
         self.initial_state = node
         node.setBrush(self.INITIAL_STATE_COLOR)
 
     def unset_initial_node(self, node: Node) -> Node:
         if self.initial_state:
-            self.initial_state.setBrush(QBrush(node.COLOR))
+            self.initial_state.setBrush(qtg.QBrush(node.COLOR))
         self.initial_state = None
 
     @staticmethod
@@ -314,7 +314,7 @@ class BuildingScene(QGraphicsScene):
         for edge in self.edges:
             edge.setSelected(True)
 
-    def mark_node(self, node_name: str, color: QColor) -> None:
+    def mark_node(self, node_name: str, color: qtg.QColor) -> None:
         if node_name not in self.nodes:
             raise ValueError()
         node = self.nodes[node_name]
@@ -391,8 +391,10 @@ class BuildingScene(QGraphicsScene):
         self.edges = []
 
 
-class BuilderView(QGraphicsView):
-    def __init__(self, parent: Optional[QWidget] = None, button_size: int = 40) -> None:
+class BuilderView(qtw.QGraphicsView):
+    def __init__(
+        self, parent: Optional[qtw.QWidget] = None, button_size: int = 40
+    ) -> None:
         super().__init__(parent)
         self.scene_ = BuildingScene(self)
         self.setScene(self.scene_)
@@ -400,32 +402,32 @@ class BuilderView(QGraphicsView):
         self.overlay_container = OverlayWidget(self)
         self.overlay_container.setContentsMargins(0, 0, 0, 0)
 
-        self.save_button = QPushButton("Save")
+        self.save_button = qtw.QPushButton("Save")
         self.save_button.setFixedSize(button_size, button_size // 2)
         self.save_button.clicked.connect(self.save_view)
 
-        self.load_button = QPushButton("Load")
+        self.load_button = qtw.QPushButton("Load")
         self.load_button.setFixedSize(button_size, button_size // 2)
         self.load_button.clicked.connect(self.load_view)
 
-        self.svg_export_button = QPushButton("Export to svg")
+        self.svg_export_button = qtw.QPushButton("Export to svg")
         self.svg_export_button.setMinimumSize(button_size, button_size // 2)
         self.svg_export_button.clicked.connect(self.save_svg)
 
-        buttons_layout = QHBoxLayout()
+        buttons_layout = qtw.QHBoxLayout()
         buttons_layout.addWidget(self.load_button)
         buttons_layout.addWidget(self.save_button)
         buttons_layout.addWidget(self.svg_export_button)
         self.overlay_container.setLayout(buttons_layout)
 
         self.setRenderHints(
-            QPainter.RenderHint.Antialiasing
-            | QPainter.RenderHint.TextAntialiasing
-            | QPainter.RenderHint.SmoothPixmapTransform
+            qtg.QPainter.RenderHint.Antialiasing
+            | qtg.QPainter.RenderHint.TextAntialiasing
+            | qtg.QPainter.RenderHint.SmoothPixmapTransform
         )
-        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
-        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setDragMode(qtw.QGraphicsView.DragMode.ScrollHandDrag)
+        self.setResizeAnchor(qtw.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setTransformationAnchor(qtw.QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
@@ -435,27 +437,27 @@ class BuilderView(QGraphicsView):
     def marked_nodes(self) -> list[str]:
         return self.scene_.marked_nodes_
 
-    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+    def mousePressEvent(self, event: qtg.QMouseEvent | None) -> None:
         super().mousePressEvent(event)
         # После начала перетаскивания вернуть курсор стрелки
         self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
-    def mouseReleaseEvent(self, event: QMouseEvent | None) -> None:
+    def mouseReleaseEvent(self, event: qtg.QMouseEvent | None) -> None:
         super().mouseReleaseEvent(event)
         # После отпускания кнопки вернуть курсор стрелки
         self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
-    def mouseDoubleClickEvent(self, event: QMouseEvent | None) -> None:
+    def mouseDoubleClickEvent(self, event: qtg.QMouseEvent | None) -> None:
         super().mouseDoubleClickEvent(event)
         self.viewport().setCursor(Qt.CursorShape.ArrowCursor)
 
-    def wheelEvent(self, event: QWheelEvent | None) -> None:
+    def wheelEvent(self, event: qtg.QWheelEvent | None) -> None:
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             zoom_direction = event.angleDelta().y() > 0
             self.zoom_scene(zoom_direction, event.position())
         return super().wheelEvent(event)
 
-    def resizeEvent(self, event: QResizeEvent | None):
+    def resizeEvent(self, event: qtg.QResizeEvent | None):
         self.setSceneRect(self.scene_.itemsBoundingRect())
         super().resizeEvent(event)
 
@@ -481,13 +483,13 @@ class BuilderView(QGraphicsView):
         delta = new_pos - old_pos
         self.translate(delta.x(), delta.y())
 
-    def mark_node(self, node_name: str, color: QColor) -> None:
+    def mark_node(self, node_name: str, color: qtg.QColor) -> None:
         self.scene_.mark_node(node_name, color)
 
     def unmark_node(self, node_name: str) -> None:
         self.scene_.unmark_node(node_name)
 
-    def mark_all(self, color: QColor) -> None:
+    def mark_all(self, color: qtg.QColor) -> None:
         for node in self.scene_.nodes:
             self.scene_.mark_node(node, color)
 
@@ -497,7 +499,7 @@ class BuilderView(QGraphicsView):
             self.scene_.unmark_node(node)
 
     def save_view(self) -> None:
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, _ = qtw.QFileDialog.getSaveFileName(
             self,
             "Сохранить файл",
             DATA_DIR,
@@ -506,14 +508,15 @@ class BuilderView(QGraphicsView):
         if not file_path:
             return
         path, filename = os.path.split(file_path)
-        if utiles.json_to_file(self.scene_.serialize(), path, filename):
-            QMessageBox.information(self, "Notification", "saved")
+        try:
+            utiles.save_json(self.scene_.serialize(), path, filename)
+        except (OSError, IOError):
+            qtw.QMessageBox.warning(self, "Error", "Automata save failed")
             return
-
-        QMessageBox.warning(self, "Error", "Automata save failed")
+        qtw.QMessageBox.information(self, "Notification", "saved")
 
     def load_view(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(
+        file_path, _ = qtw.QFileDialog.getOpenFileName(
             self,
             "Выберите файл",
             DATA_DIR,
@@ -527,15 +530,15 @@ class BuilderView(QGraphicsView):
             with open(file_path, mode="r") as file:
                 self.scene_.deserialize(json.loads(file.read()))
         except IOError:
-            QMessageBox.warning(self, "Error", "Automata save failed")
+            qtw.QMessageBox.warning(self, "Error", "Automata save failed")
         except (json.JSONDecodeError, TypeError):
-            QMessageBox.warning(self, "Error", "File incorrect format")
+            qtw.QMessageBox.warning(self, "Error", "File incorrect format")
         else:
-            QMessageBox.information(self, "Notification", "loaded")
+            qtw.QMessageBox.information(self, "Notification", "loaded")
 
     def save_svg(self) -> None:
         start_path = os.path.join(DATA_DIR, VIEW_FILE_NAME)
-        file_path, _ = QFileDialog.getSaveFileName(
+        file_path, _ = qtw.QFileDialog.getSaveFileName(
             self,
             "Save File",
             start_path,
@@ -556,7 +559,7 @@ class BuilderView(QGraphicsView):
             generator.setSize(self.scene_.sceneRect().size().toSize())
             generator.setViewBox(scene_rect)
 
-            painter = QPainter()
+            painter = qtg.QPainter()
             painter.begin(generator)
             painter.setFont(Node.FONT)
             self.scene_.render(
@@ -570,7 +573,7 @@ class BuilderView(QGraphicsView):
             for item in selected:
                 item.setSelected(True)
         except IOError:
-            QMessageBox.warning(self, "Error", "Automata save failed")
+            qtw.QMessageBox.warning(self, "Error", "Automata save failed")
 
     def initial_state(self) -> str:
         initial_state = self.scene_.initial_state
