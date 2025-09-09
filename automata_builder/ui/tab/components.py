@@ -3,14 +3,13 @@ from typing import Callable, Optional
 
 import PyQt6.QtCore as qtc
 import PyQt6.QtWidgets as qtw
-from attr import dataclass
 from core import parser
 from core.automata import Automata
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
 
-from automata_builder.core import compute
+from automata_builder.core import calculate
 from automata_builder.ui.common import (
     FilteredLineEdit,
     FilteredTextEdit,
@@ -29,6 +28,7 @@ class AlphabetEdit(qtw.QTextEdit):
         self.prev_text = self.toPlainText()
 
     def format_text(self) -> None:
+        """Keeps field in style of python set format (example: {0, 1, 2, 3})"""
         text = self.toPlainText()
 
         cursor = self.textCursor()
@@ -120,7 +120,7 @@ class Parameters(qtw.QWidget):
 
         self.draw_button = qtw.QPushButton("Draw")
         self.draw_curves_button = qtw.QPushButton("Draw curves")
-        self.draw_curves_button.setVisible(False)
+
         layout = qtw.QVBoxLayout()
         layout.setAlignment(qtc.Qt.AlignmentFlag.AlignTop)
 
@@ -185,22 +185,12 @@ class Parameters(qtw.QWidget):
         self.output_alphabet_field.set_alphabet(output_alphabet)
         self.initial_state_field.setText(initial_state)
 
-    def is_empty(self):
+    def is_empty(self) -> None:
         return self.input_alphabet() or self.output_alphabet() or self.initial_state()
 
 
-@dataclass
-class Points:
-    x: list[int]
-    y: list[int]
-    xlim: Optional[tuple[int, int]]
-    ylim: Optional[tuple[int, int]]
-    is_plot: bool = False
-    color: str = "red"
-
-
 class PlotWidget(qtw.QWidget):
-    def __init__(self, parent: Optional[qtw.QWidget] = None):
+    def __init__(self, parent: Optional[qtw.QWidget] = None) -> None:
         super().__init__(parent)
         fig = Figure(figsize=(5, 5))
         self.canvas = FigureCanvasQTAgg(fig)
@@ -212,12 +202,19 @@ class PlotWidget(qtw.QWidget):
         layout.addWidget(self.canvas)
         self.setLayout(layout)
 
-    def draw(self, *points: Points, title: str = "") -> None:
+    def draw(self, *points: calculate.Points, title: str = "") -> None:
         shift = 0.2
         self.ax.clear()
-        compute.draw(self.ax, *points, border_shift=shift, title=title, grid=True)
-
+        calculate.draw(self.ax, *points, border_shift=shift, title=title, grid=True)
         self.canvas.draw()
+
+
+class SidePanelError(Exception):
+    """Base exception for SidePanel errors."""
+
+
+class InvalidModeError(SidePanelError):
+    """Raised when an operation is performed in the wrong mode."""
 
 
 class SidePanel(qtw.QWidget):
@@ -247,9 +244,13 @@ class SidePanel(qtw.QWidget):
             qtw.QSizePolicy.Policy.Expanding, qtw.QSizePolicy.Policy.Expanding
         )
 
+        self.empty_widget = qtw.QWidget()
+        self.empty_widget.setHidden(True)
+
         self.stack_layout = qtw.QStackedLayout()
         self.stack_layout.addWidget(self.error_messages)
         self.stack_layout.addWidget(self.plot)
+        self.stack_layout.addWidget(self.empty_widget)
 
         self.close_button = qtw.QPushButton(">>")
 
@@ -277,12 +278,12 @@ class SidePanel(qtw.QWidget):
             self.cur_mode_ = self.Mode.PLOT
 
         elif mode == self.Mode.EMPTY:
-            self.stack_layout.setCurrentWidget(None)
+            self.stack_layout.setCurrentWidget(self.empty_widget)
             self.cur_mode_ = self.Mode.EMPTY
 
     def add_messages(self, *messages: str) -> None:
         if self.current_mode != self.Mode.ERROR_MESSAGES:
-            raise Exception("Error messages widget doesn't set")
+            raise ("Error messages widget doesn't set")
 
         group = qtc.QSequentialAnimationGroup(self.error_messages)
 
@@ -311,28 +312,27 @@ class SidePanel(qtw.QWidget):
 
     def clear_messages(self) -> None:
         if self.current_mode != self.Mode.ERROR_MESSAGES:
-            raise Exception("Error messages widget doesn't set")
+            raise InvalidModeError("Error messages widget doesn't set")
         self.error_messages.clear()
 
-    def draw_plot(self, *points: Points) -> None:
-        # xlim = xmin, xmax
-        # ylim = ymin, ymax
-        if self.current_mode not in (self.Mode.EMPTY, self.Mode.PLOT):
-            raise Exception("Plot widget doesn't set")
+    def draw_plot(self, *points: calculate.Points) -> None:
+        if self.current_mode != self.Mode.PLOT:
+            raise InvalidModeError("Plot widget doesn't set")
 
-        if self.current_mode == self.Mode.EMPTY:
-            self.set_mode(self.Mode.PLOT)
+        # if self.current_mode == self.Mode.EMPTY:
+        #     self.set_mode(self.Mode.PLOT)
 
         self.plot.draw(*points)
 
     def switch_to_plot(self) -> None:
         if self.current_mode == self.Mode.PLOT:
-            raise Exception("Plot widget is already setted")
+            raise InvalidModeError("Plot widget is already set")
+
         self.set_mode(self.Mode.PLOT)
 
     def switch_to_messages(self) -> None:
         if self.current_mode == self.Mode.ERROR_MESSAGES:
-            raise Exception("Error messages widget is already setted")
+            raise InvalidModeError("Error messages widget is already set")
 
         self.set_mode(self.Mode.ERROR_MESSAGES)
         # self.error_messages.setMaximumSize(self.size())
@@ -458,7 +458,7 @@ class TactCounter(OverlayWidget):
         self.counter.adjustSize()
 
 
-class AutomataContainer(qtw.QWidget):
+class Container(qtw.QWidget):
     MARKED_COLOR = QColor(128, 0, 0)
 
     def __init__(
@@ -485,10 +485,10 @@ class AutomataContainer(qtw.QWidget):
         self.word_processing.backword_button.clicked.connect(self.backward_click)
         self.word_processing.clear_button.clicked.connect(self.clear_click)
 
-        layout = qtw.QVBoxLayout()
-        layout.addWidget(self.view)
-        layout.addWidget(self.word_processing, 0, qtc.Qt.AlignmentFlag.AlignTop)
-        self.setLayout(layout)
+        self._layout = qtw.QVBoxLayout()
+        self._layout.addWidget(self.view)
+        self._layout.addWidget(self.word_processing, 0, qtc.Qt.AlignmentFlag.AlignTop)
+        self.setLayout(self._layout)
 
         # --------------------------------------
         self.tact_counter = TactCounter(self)  # tact counter overlay view
@@ -499,7 +499,7 @@ class AutomataContainer(qtw.QWidget):
         self.transitions_history = []
         self.automata_errors_handler = None
 
-    def resizeEvent(self, event: QResizeEvent | None = None):
+    def resizeEvent(self, event: QResizeEvent | None = None) -> None:
         self.draw_tact_counter()
         return super().resizeEvent(event)
 
@@ -515,7 +515,7 @@ class AutomataContainer(qtw.QWidget):
 
         return super().keyPressEvent(event)
 
-    def draw_tact_counter(self):
+    def draw_tact_counter(self) -> None:
         shift = 10
         pos = self.view.geometry().bottomLeft()
         pos.setX(pos.x() + shift)
@@ -554,6 +554,7 @@ class AutomataContainer(qtw.QWidget):
         return False
 
     def forward_click(self) -> None:
+        """Increase the output word on 1 symbol"""
         if not (self.word_processing.input_word and self.automata_errors_handler):
             return
 
@@ -592,13 +593,13 @@ class AutomataContainer(qtw.QWidget):
             self.tact_counter.increnemt()
 
     def backward_click(self) -> None:
+        """Reduce the output word on 1 symbol"""
         if not (self.word_processing.input_word and self.automata_errors_handler):
             return
 
         if len(self.transitions_history) == 0:
             return
 
-        # Reduce on 1 symbol output word
         output_word = self.word_processing.output_word
         self.word_processing.output_word = output_word[:-1]
 
@@ -616,16 +617,18 @@ class AutomataContainer(qtw.QWidget):
         else:
             self.tact_counter.decrement()
 
-    def clear_click(self):
+    def clear_click(self) -> None:
         self.word_processing.input_word = ""
         self.word_processing.output_word = ""
+
         if len(self.transitions_history) != 0:
             state = self.transitions_history[-1]
             self.view.unmark_node(state)
+
         self.transitions_history.clear()
         self.tact_counter.setHidden(True)
 
-    def is_empty_scene(self):
+    def is_empty_scene(self) -> None:
         return self.view.is_empty()
 
 

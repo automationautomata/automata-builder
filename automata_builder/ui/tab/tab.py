@@ -1,4 +1,3 @@
-from threading import Event
 from typing import Callable, Optional
 
 from core.automata import Automata
@@ -19,28 +18,27 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from automata_builder.core import compute
+from automata_builder.core import calculate
 from automata_builder.ui.tab.components import (
-    AutomataContainer,
+    Container,
     FunctionInput,
     LengthInput,
     Parameters,
-    Points,
     SidePanel,
 )
 from automata_builder.utiles.utiles import (
-    WorkerThread,
-    generate_colors,
     StoppableFunction,
+    WorkerThread,
 )
 
 
 class Tab(QWidget):
     DEFUALT_LENGTH = 10
+    ANIMATION_DURATION = 25
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.automata_container = AutomataContainer()
+        self.automata_container = Container()
         self.automata_container.setMinimumWidth(self.width() // 4)
         self.automata_container.setMinimumHeight(self.height() // 3)
         self.automata_container.setSizePolicy(
@@ -60,25 +58,26 @@ class Tab(QWidget):
         self.func_input = FunctionInput()
         self.func_input.setMaximumWidth(self.width() // 4)
         self.func_input.setMinimumWidth(0)
-        self.func_input.setFixedHeight(150)
+        self.func_input.setFixedHeight(120)
         self.func_input.draw_button.clicked.connect(self.draw_func_click)
 
         self.errors_panel_width_ = self.width() // 3
         self.plot_panel_width_ = self.height()
         side_panel_max_width = max(self.plot_panel_width_, self.errors_panel_width_)
 
+        # to enter length for all calculation types
         self.length_input = LengthInput(default_len=Tab.DEFUALT_LENGTH)
 
         self.stop_button = QPushButton("Stop drawing")
-        self.stop_button.clicked.connect(self.stop_computation)
+        self.stop_button.clicked.connect(
+            self.stop_calculation
+        )  # if the calculation is long
+        self.mid_panel_layout = QVBoxLayout()
 
-        self.mid_panel__layout = QVBoxLayout()
-        self.mid_panel__layout.addWidget(self.length_input)
-        self.mid_panel__layout.addWidget(
-            self.params_input, 1, Qt.AlignmentFlag.AlignTop
-        )
-        self.mid_panel__layout.addWidget(self.func_input, 1, Qt.AlignmentFlag.AlignTop)
-        self.mid_panel__layout.addWidget(self.stop_button)
+        self.mid_panel_layout.addWidget(self.length_input)
+        self.mid_panel_layout.addWidget(self.params_input, 1, Qt.AlignmentFlag.AlignTop)
+        self.mid_panel_layout.addWidget(self.func_input, 1, Qt.AlignmentFlag.AlignTop)
+        self.mid_panel_layout.addWidget(self.stop_button, 1, Qt.AlignmentFlag.AlignTop)
 
         self.side_panel = SidePanel()
         self.side_panel.setMaximumWidth(side_panel_max_width)
@@ -88,7 +87,7 @@ class Tab(QWidget):
         self._layout = QHBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self._layout.addWidget(self.automata_container, 2)
-        self._layout.addLayout(self.mid_panel__layout, 0)
+        self._layout.addLayout(self.mid_panel_layout, 0)
         self._layout.addWidget(self.side_panel, 0)
 
         self.prev_prefix_text = self.params_input.prefix_field.text()
@@ -131,30 +130,7 @@ class Tab(QWidget):
         if not automata:
             return
 
-        inputs = sorted(automata.inputs, key=lambda x: automata.inputs[x])
-
-        def calc(cond: Event):
-            plots = []
-            x, y = [], []
-            xlim = 1, 2
-            ylim = 1, len(automata.outputs) + 1
-
-            colors = generate_colors(len(inputs))
-            n = len(automata.states)
-
-            for symb in inputs:
-                word = symb * n
-                for i in range(1, n + 1):
-                    if cond.is_set():
-                        return tuple(plots)
-                    out_word = automata.read(word[:i])
-                    x.append(2 * (1 - 2**-i))
-                    y.append(automata.output_number(out_word))
-                plots.append(Points(x, y, xlim, ylim, color=next(colors), is_plot=True))
-
-            return tuple(plots)
-
-        self.start_computation(calc)
+        self.start_calculation(calculate.curves(automata))
 
     def draw_automata_click(self) -> None:
         automata = self.automata()
@@ -164,8 +140,8 @@ class Tab(QWidget):
         input_alphabet = self.params_input.input_alphabet()
         output_alphabet = self.params_input.output_alphabet()
 
-        # Check order of symbols
-        # if orders is different then reset it
+        # Checks the order of symbols
+        # if the order is different resets it.
         if automata.input_alphabet != input_alphabet and len(input_alphabet) != 0:
             automata.reset_inputs_order(input_alphabet)
 
@@ -187,8 +163,10 @@ class Tab(QWidget):
 
         length = self.length_input.get_length()
 
-        compute_func = compute.by_automata(automata, length, prefix, suffix, last_state)
-        self.start_computation(compute_func)
+        calculate_func = calculate.by_automata(
+            automata, length, prefix, suffix, last_state
+        )
+        self.start_calculation(calculate_func)
 
     def draw_func_click(self):
         base = self.func_input.get_base()
@@ -199,22 +177,22 @@ class Tab(QWidget):
             return
 
         length = self.length_input.get_length()
-        self.start_computation(compute.by_function(func, base, length))
+        self.start_calculation(calculate.by_function(func, base, length))
 
-    def start_computation(self, func: StoppableFunction[None, Points]):
+    def start_calculation(self, func: StoppableFunction[None, calculate.Points]):
         if self._thread and self._thread.isRunning():
             reply = QMessageBox.question(
                 self,
                 "Confirm",
-                "Do you want to stop computation? (default No)",
+                "Do you want to stop the calculation? (default No)",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.Yes:
-                self.stop_computation()
+                self.stop_calculation()
 
         self._thread = WorkerThread(func)
-        self._thread.setObjectName("computation thread")
+        self._thread.setObjectName("Calculation_thread")
         self._thread.result_ready.connect(lambda data: self.draw_plot(*data))
         self._thread.finished.connect(self._thread.deleteLater)
 
@@ -225,12 +203,12 @@ class Tab(QWidget):
 
         self._thread.start()
 
-    def stop_computation(self) -> None:
+    def stop_calculation(self) -> None:
         if self._thread is None or self._thread.isFinished():
             return
         self._thread.stop()
 
-    def draw_plot(self, *points: Points) -> None:
+    def draw_plot(self, *points: calculate.Points) -> None:
         if self.side_panel.current_mode != SidePanel.Mode.PLOT:
             self.side_panel.switch_to_plot()
 
@@ -257,9 +235,11 @@ class Tab(QWidget):
         self.toggle_panel(after_finish=after_finish)
 
     def word_input_condition(self, text: str) -> bool:
+        """Checks if the input word consists of alphabet symbols"""
         automata, _ = self.automata_container.automata()
         if not automata:
             return False
+
         symbols = set(text)
         errors = self.compare_params(
             automata.input_alphabet,
@@ -271,6 +251,8 @@ class Tab(QWidget):
     def compare_params(
         self, input_alphabet: list[str], output_alphabet: list[str], initial_state: str
     ) -> list[str]:
+        """Compares the automata alphabets and initial state
+        with the entered in params panel"""
         entered_input_alphabet = self.params_input.input_alphabet()
         entered_output_alphabet = self.params_input.output_alphabet()
         entered_initial_state = self.params_input.initial_state()
@@ -304,6 +286,8 @@ class Tab(QWidget):
         return errors
 
     def show_errors(self, errors: list[str]) -> None:
+        """Makes the sidebar visible if it isn't, or switches to the message bar
+        (cleans old messages)"""
         if self.side_panel.current_mode == SidePanel.Mode.ERROR_MESSAGES:
             self.side_panel.clear_messages()
             self.side_panel.add_messages(*errors)
@@ -321,8 +305,8 @@ class Tab(QWidget):
         self, dest_width: int = 0, after_finish: Callable[[], None] | None = None
     ) -> None:
         group = QSequentialAnimationGroup(self.parentWidget())
-        duration = 200
 
+        duration = Tab.ANIMATION_DURATION
         auto_geom = self.automata_container.geometry()
         data_geom = self.params_input.geometry()
         panel_geom = self.side_panel.geometry()
@@ -346,19 +330,19 @@ class Tab(QWidget):
         dest_auto_geom.setRight(auto_geom.right() - width_diff)
 
         auto_anim = QPropertyAnimation(self.automata_container, b"geometry", self)
-        auto_anim.setDuration(duration // 8)
+        auto_anim.setDuration(duration)
         auto_anim.setStartValue(self.automata_container.geometry())
         auto_anim.setEndValue(dest_auto_geom)
         auto_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
         data_anim = QPropertyAnimation(self.params_input, b"geometry")
-        data_anim.setDuration(duration // 8)
+        data_anim.setDuration(duration)
         data_anim.setStartValue(data_geom)
         data_anim.setEndValue(dest_data_geom)
         data_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
         panel_anim = QPropertyAnimation(self.side_panel, b"geometry")
-        panel_anim.setDuration(duration * 2)
+        panel_anim.setDuration(duration * 16)
         panel_anim.setStartValue(panel_geom)
         panel_anim.setEndValue(dest_panel_geom)
         panel_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)

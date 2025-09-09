@@ -176,6 +176,19 @@ class BuildingScene(qtw.QGraphicsScene):
         selected = self.selectedItems()
         selected_nodes = [item for item in selected if isinstance(item, Node)]
         if len(selected_nodes) > 2:
+            return
+
+        if len(selected_nodes) == 2:
+            src: Node = (
+                selected_nodes[0]
+                if selected_nodes[0] is not node
+                else selected_nodes[1]
+            )
+            if src.name not in node.in_edges:
+                add_edge_action = qtg.QAction("Соединить", self)
+                add_edge_action.triggered.connect(lambda: self.create_edge(src, node))
+                return [add_edge_action]
+
             return []
 
         delete_action = qtg.QAction("Удалить", self)
@@ -192,21 +205,12 @@ class BuildingScene(qtw.QGraphicsScene):
             initial_action.triggered.connect(lambda: self.set_initial_node(node))
 
         actions = [delete_action, edit_action, initial_action]
-
-        if len(selected_nodes) == 0 or len(selected_nodes) == 1:
-            if not node.has_loop():
-                make_loop_action = qtg.QAction("Сделать петлю", self)
-                make_loop_action.triggered.connect(lambda: self.create_edge(node, node))
-                actions.append(make_loop_action)
+        if node.has_loop():
             return actions
 
-        src: Node = (
-            selected_nodes[0] if selected_nodes[0] is not node else selected_nodes[1]
-        )
-        if src.name not in node.in_edges:
-            add_edge_action = qtg.QAction("Соединить", self)
-            add_edge_action.triggered.connect(lambda: self.create_edge(src, node))
-            actions.append(add_edge_action)
+        make_loop_action = qtg.QAction("Сделать петлю", self)
+        make_loop_action.triggered.connect(lambda: self.create_edge(node, node))
+        actions.append(make_loop_action)
 
         return actions
 

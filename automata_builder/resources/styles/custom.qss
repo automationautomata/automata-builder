@@ -68,7 +68,7 @@ AutomataWordInput QPushButton {
     border-radius: 3px;
 }
 
-AutomataContainer > OverlayWidget > QLabel {
+Container > OverlayWidget > QLabel {
     padding: 1px;
     border: 0.5px solid#90b6b6b6;
     background-color:  #43d2cbcb;
@@ -76,7 +76,7 @@ AutomataContainer > OverlayWidget > QLabel {
     font-family: "Sans Mono";
 }
 
-/* AutomataContainer > QWidget {
+/* Container > QWidget {
     border: 2px solid #c14545;
     font-size: 15pt;
     font-family: sans-serif;

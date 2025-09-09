@@ -147,8 +147,8 @@ class MainWindow(QWidget):
         filepath = os.path.join(SESSIONS_DIR, "".join(last_session))
         try:
             self.load_session(filepath)
-        except (IOError, FileNotFoundError, json.JSONDecodeError, TypeError) as ex:
-            if isinstance(ex, (json.JSONDecodeError, TypeError)):
+        except (IOError, FileNotFoundError, json.JSONDecodeError) as ex:
+            if isinstance(ex, (json.JSONDecodeError)):
                 QMessageBox.warning(self, "Error", "File incorrect format")
             else:
                 QMessageBox.warning(self, "Error", "Session load failed")

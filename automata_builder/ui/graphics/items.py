@@ -181,10 +181,10 @@ class Edge(qtw.QGraphicsPathItem):
     def shape(self) -> qtg.QPainterPath:
         original_path = super().shape()
         stroker = qtg.QPainterPathStroker()
-        # ширина с обеих сторон
+
         stroker.setWidth(self.click_area_size_ * 2)
         expanded_path = stroker.createStroke(original_path)
-        # Создаем новую область с шириной 'width' вокруг исходного пути
+        # Создаем новую область с заданной шириной вокруг исходного пути
         return expanded_path
 
     def paint(self, painter, option, widget=None):

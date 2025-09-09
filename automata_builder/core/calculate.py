@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from threading import Event
 from typing import Callable, Optional
@@ -5,15 +6,15 @@ from typing import Callable, Optional
 from matplotlib.axes import Axes
 
 from automata_builder.core.automata import Automata
-from automata_builder.utiles.utiles import StoppableFunction
+from automata_builder.utiles.utiles import StoppableFunction, generate_colors
 
 
 @dataclass
 class Points:
     x: list[int]
     y: list[int]
-    xlim: Optional[tuple[int, int]]
-    ylim: Optional[tuple[int, int]]
+    xlim: Optional[tuple[int, int]] = None
+    ylim: Optional[tuple[int, int]] = None
     is_plot: bool = False
     color: str = "red"
 
@@ -46,7 +47,7 @@ def by_function(
     base: int,
     length: int,
 ) -> StoppableFunction[None, tuple[Points]]:
-    def wrap(cond: Event):
+    def calculate(cond: Event):
         xlim = 1, base + 1
         ylim = 1, base + 1
         x, y = [], []
@@ -58,13 +59,13 @@ def by_function(
                 y.append(padic_to_geom(func(num), i, base))
         return (Points(x, y, xlim, ylim),)
 
-    return wrap
+    return calculate
 
 
 def by_automata(
     automata: Automata, length: int, prefix: str, suffix: str, last_state: str
 ) -> StoppableFunction[None, tuple[Points]]:
-    def warp(cond: Event):
+    def calculate(cond: Event):
         xlim = 1, len(automata.inputs) + 1
         ylim = 1, len(automata.outputs) + 1
 
@@ -78,7 +79,51 @@ def by_automata(
                 y.append(automata.output_number(out_word))
         return (Points(x, y, xlim, ylim),)
 
-    return warp
+    return calculate
+
+
+def curves(automata: Automata) -> StoppableFunction[None, tuple[Points]]:
+    sorted_inputs = sorted(automata.inputs, key=lambda x: automata.inputs[x])
+    k = len(automata.states)
+    m = len(automata.outputs)
+
+    def calculate(cond: Event):
+        x = [0] * k
+        x[0] = 1
+        for i in range(1, k):
+            x[i] = x[i - 1] + 1 / 2**i
+
+        plots = []
+        colors = generate_colors(len(sorted_inputs))
+
+        def f(x, deltas):
+            res = 0
+            for delta in deltas:
+                res += (m + 1) ** (delta - math.log2(1 / (2 - x)))
+            return res
+
+        for in_ in sorted_inputs:
+            if cond.is_set():
+                break
+
+            out_word = automata.read(in_ * k)
+            deltas = {num: [] for num in automata.outputs.values()}
+            for j in range(k):
+                out = automata.outputs[out_word[-j - 1]]
+                deltas[out].append((k - 1 - j))
+
+            y = [0] * len(x)
+            for i in range(len(x)):
+                if cond.is_set():
+                    return tuple(plots)
+
+                y[i] = sum(out * f(x[i], vals) for out, vals in deltas.items())
+
+            plots.append(Points(x, y, color=next(colors), is_plot=True))
+
+        return tuple(plots)
+
+    return calculate
 
 
 def draw(
@@ -109,3 +154,16 @@ def draw(
         ax.set_xlim(min(xmins), max(xmaxs))
     if ymins and ymaxs:
         ax.set_ylim(min(ymins), max(ymaxs))
+
+
+def f(x, i):
+    print(list(range(5))[-i - 1 :])
+    return 2 * sum(
+        [
+            3 ** (4 - math.log(1 / (2 - x))),
+            +(3 ** (3 - math.log(1 / (2 - x)))),
+            +(3 ** (2 - math.log(1 / (2 - x)))),
+            +(3 ** (1 - math.log(1 / (2 - x)))),
+            +(3 ** (-math.log(1 / (2 - x)))),
+        ][: i + 1]
+    )
