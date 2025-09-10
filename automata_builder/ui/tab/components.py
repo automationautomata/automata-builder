@@ -3,21 +3,19 @@ from typing import Callable, Optional
 
 import PyQt6.QtCore as qtc
 import PyQt6.QtWidgets as qtw
-from core import parser
-from core.automata import Automata
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
 
-from automata_builder.core import calculate
-from automata_builder.ui.common import (
+from core import calculate, parser
+from core.automata import Automata
+from ..common import (
     FilteredLineEdit,
     FilteredTextEdit,
     OverlayWidget,
     VerticalMessagesWidget,
 )
-from automata_builder.ui.graphics.view import BuilderView
-from automata_builder.ui.tab.components import *
+from ..graphics.view import BuilderView
 
 
 class AlphabetEdit(qtw.QTextEdit):

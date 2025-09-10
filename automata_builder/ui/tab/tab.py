@@ -1,5 +1,6 @@
 from typing import Callable, Optional
 
+from core import calculate
 from core.automata import Automata
 from PyQt6.QtCore import (
     QAbstractAnimation,
@@ -17,18 +18,17 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from utiles.utiles import (
+    StoppableFunction,
+    WorkerThread,
+)
 
-from automata_builder.core import calculate
-from automata_builder.ui.tab.components import (
+from ..tab.components import (
     Container,
     FunctionInput,
     LengthInput,
     Parameters,
     SidePanel,
-)
-from automata_builder.utiles.utiles import (
-    StoppableFunction,
-    WorkerThread,
 )
 
 

@@ -5,8 +5,8 @@ from typing import Callable, Optional
 
 from matplotlib.axes import Axes
 
-from automata_builder.core.automata import Automata
-from automata_builder.utiles.utiles import StoppableFunction, generate_colors
+from core.automata import Automata
+from utiles.utiles import StoppableFunction, generate_colors
 
 
 @dataclass
@@ -99,7 +99,7 @@ def curves(automata: Automata) -> StoppableFunction[None, tuple[Points]]:
         def f(x, deltas):
             res = 0
             for delta in deltas:
-                res += (m + 1) ** (delta - math.log2(1 / (2 - x)))
+                res += (m + 1) ** -(math.log2(2 / (2 - x)) - 1 - delta)
             return res
 
         for in_ in sorted_inputs:
@@ -155,15 +155,3 @@ def draw(
     if ymins and ymaxs:
         ax.set_ylim(min(ymins), max(ymaxs))
 
-
-def f(x, i):
-    print(list(range(5))[-i - 1 :])
-    return 2 * sum(
-        [
-            3 ** (4 - math.log(1 / (2 - x))),
-            +(3 ** (3 - math.log(1 / (2 - x)))),
-            +(3 ** (2 - math.log(1 / (2 - x)))),
-            +(3 ** (1 - math.log(1 / (2 - x)))),
-            +(3 ** (-math.log(1 / (2 - x)))),
-        ][: i + 1]
-    )

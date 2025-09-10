@@ -1,57 +1,50 @@
 import json
 import os
-from os.path import dirname, join
 from threading import Event
 from typing import Any, Callable, Generator, Optional, TypeVar
 
 from matplotlib import pyplot as plt
 from PyQt6.QtCore import QDir, QObject, QThread, pyqtSignal
 
-from .data import IMAGES_DIRS, STYLESHEETS_DIR
+from .data import STYLESHEETS_DIR
 
 
-def load_stylesheet(filename: str):
-    if not filename.endswith(".qss"):
-        filename = f"{filename}.qss"
-
-    path = join(STYLESHEETS_DIR, filename)
-    with open(path, "r", encoding="utf-8") as file:
+def load_stylesheet(filepath: str) -> str:
+    with open(filepath, "r", encoding="utf-8") as file:
         return file.read()
 
 
-def load_stylesheets():
-    style_files = [
-        entry for entry in os.listdir(STYLESHEETS_DIR) if entry.endswith(".qss")
-    ]
+def load_stylesheets(dir: str = STYLESHEETS_DIR) -> str:
+    style_files = [entry for entry in os.listdir(dir) if entry.endswith(".qss")]
 
     if len(style_files) == 0:
         raise Exception("There is no styles")
 
-    return "\n".join(load_stylesheet(file) for file in style_files)
+    return "\n".join(load_stylesheet(os.path.join(dir, f)) for f in style_files)
 
 
-def save_json(data: dict, path: str, filename: str) -> None:
-    if not os.path.isdir(path):
-        os.mkdir(path)
+def save_json(data: dict, dir: str, filename: str) -> None:
+    if not os.path.isdir(dir):
+        os.mkdir(dir)
 
     base_ext = ".json"
     name, ext = os.path.splitext(filename)
     if not ext:
         ext = base_ext
 
-    ind = sum(filename in entry for entry in os.listdir(path))
+    ind = sum(filename in entry for entry in os.listdir(dir))
     if ind != 0:
         name = f"{name} {ind}"
 
-    filepath = os.path.join(path, f"{name}{ext}")
+    filepath = os.path.join(dir, f"{name}{ext}")
 
     with open(filepath, mode="w+") as f:
         f.write(json.dumps(data))
 
 
-def register_resources():
-    for dir in IMAGES_DIRS:
-        QDir.addSearchPath(dirname(dir), dir)
+def register_resources(dir: str):
+    for d in dir:
+        QDir.addSearchPath(os.path.dirname(d), d)
 
 
 def generate_colors(n: int) -> Generator:
@@ -81,9 +74,7 @@ class textfilter:
         self.set_text(self.prev_text)
 
 
-T = TypeVar("T")
-E = TypeVar("E")
-StoppableFunction = Callable[[Event, T], E]
+StoppableFunction = Callable[[Event, TypeVar("T")], TypeVar("E")]
 
 
 class WorkerThread(QThread):
