@@ -3,21 +3,19 @@ from typing import Callable, Optional
 
 import PyQt6.QtCore as qtc
 import PyQt6.QtWidgets as qtw
-from core import parser
+from core import calculate, parser
 from core.automata import Automata
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
 
-from automata_builder.core import calculate
-from automata_builder.ui.common import (
+from .common import (
     FilteredLineEdit,
     FilteredTextEdit,
     OverlayWidget,
     VerticalMessagesWidget,
 )
-from automata_builder.ui.graphics.view import BuilderView
-from automata_builder.ui.tab.components import *
+from .graphics.view import BuilderView
 
 
 class AlphabetEdit(qtw.QTextEdit):
@@ -258,11 +256,11 @@ class SidePanel(qtw.QWidget):
         self.main_layout.addLayout(self.stack_layout)
         self.main_layout.addWidget(self.close_button)
 
-    def resizeEvent(self, a0) -> None:
+    def resizeEvent(self, event) -> None:
         self.blockSignals(True)
         self.container.resize(self.size())
         self.blockSignals(False)
-        return super().resizeEvent(a0)
+        return super().resizeEvent(event)
 
     @property
     def current_mode(self) -> "SidePanel.Mode":
@@ -428,7 +426,7 @@ class TactCounter(OverlayWidget):
         self.setContextMenuPolicy(qtc.Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.custom_menu)
 
-    def custom_menu(self, point: qtc.QPoint):
+    def custom_menu(self, point: qtc.QPoint) -> None:
         menu = qtw.QMenu(self)
 
         hide_action = QAction("Скрыть")
@@ -438,21 +436,21 @@ class TactCounter(OverlayWidget):
         menu.exec(self.mapToGlobal(point))
 
     @property
-    def value(self):
+    def value(self) -> int:
         return self.value_
 
     @value.setter
-    def value(self, new_value: int):
+    def value(self, new_value: int) -> None:
         self.value_ = new_value
         self.counter.setText(str(self.value))
         self.counter.adjustSize()
 
-    def increnemt(self):
+    def increnemt(self) -> None:
         self.value_ += 1
         self.counter.setText(str(self.value))
         self.counter.adjustSize()
 
-    def decrement(self):
+    def decrement(self) -> None:
         self.value_ -= 1
         self.counter.setText(str(self.value))
         self.counter.adjustSize()
@@ -632,6 +630,10 @@ class Container(qtw.QWidget):
         return self.view.is_empty()
 
 
+class FunctionInputError(Exception):
+    pass
+
+
 class FunctionInput(qtw.QWidget):
     VARIABLE_NAME = "x"
 
@@ -655,13 +657,17 @@ class FunctionInput(qtw.QWidget):
     @staticmethod
     def _filter_condition_(text: str) -> bool:
         allowed = set([" ", "(", ")", FunctionInput.VARIABLE_NAME])
-        allowed.update(f"{i}" for i in range(10))
+        allowed.update(map(str, range(10)))
         allowed.update(parser.allowed_operations())
         return allowed.issuperset(set(text))
 
     def get_function(self, base: int) -> Callable[[int], int]:
         expr = self.func_input.toPlainText()
-        valid_expr = parser.parse_expression(expr, base)
+        try:
+            valid_expr = parser.parse_expression(expr, base)
+        except (parser.ExpressionError, SyntaxError, TypeError, ValueError) as e:
+            raise FunctionInputError from e
+
         return eval(f"lambda x: {valid_expr}")
 
     def get_function_text(self) -> Callable[[int], int]:

@@ -1,6 +1,5 @@
 from typing import Callable, Optional
 
-from core.automata import Automata
 from PyQt6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
@@ -18,17 +17,19 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from automata_builder.core import calculate
-from automata_builder.ui.tab.components import (
+from core import calculate
+from core.automata import Automata
+from utiles.utiles import (
+    StoppableFunction,
+    WorkerThread,
+)
+from .tab_components import (
     Container,
     FunctionInput,
     LengthInput,
     Parameters,
     SidePanel,
-)
-from automata_builder.utiles.utiles import (
-    StoppableFunction,
-    WorkerThread,
+    FunctionInputError,
 )
 
 
@@ -170,10 +171,14 @@ class Tab(QWidget):
 
     def draw_func_click(self):
         base = self.func_input.get_base()
+        if base == 0:
+            QMessageBox.warning(self, "Invalid base", "Base can't be zero")
+            return
+
         try:
             func = self.func_input.get_function(base)
-        except (SyntaxError, TypeError, ValueError) as e:
-            QMessageBox.warning(self, "Invalid function", str(e))
+        except FunctionInputError as e:
+            QMessageBox.warning(self, "Invalid function", str(e.__cause__))
             return
 
         length = self.length_input.get_length()

@@ -6,5 +6,4 @@ saves
 dist
 build
 automata_viewer.egg-info
-tmp.py
 tasks.md

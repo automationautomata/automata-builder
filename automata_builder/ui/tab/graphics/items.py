@@ -6,7 +6,7 @@ import PyQt6.QtGui as qtg
 import PyQt6.QtWidgets as qtw
 from PyQt6.QtCore import QPointF, Qt
 
-from automata_builder.ui.common import EditableTextItem
+from ..common import EditableTextItem
 
 
 class Node(qtw.QGraphicsEllipseItem):

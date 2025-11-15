@@ -7,14 +7,14 @@ import PyQt6.QtWidgets as qtw
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtSvg import QSvgGenerator
 
-from automata_builder.ui.common import (
+from utiles import utiles
+from utiles.data import AUTOMATA_EXT, DATA_DIR, VIEW_FILE_NAME
+from ..common import (
     OverlayWidget,
     TableInputDialog,
     VerticalInputDialog,
 )
-from automata_builder.ui.graphics.items import Edge, Node
-from automata_builder.utiles import utiles
-from automata_builder.utiles.data import AUTOMATA_EXT, DATA_DIR, VIEW_FILE_NAME
+from .items import Edge, Node
 
 
 class EdgeEditDialog(TableInputDialog):

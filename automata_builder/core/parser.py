@@ -14,7 +14,7 @@ def _operators_() -> dict[ast.operator, str]:
         ast.BitXor: "^",
         ast.Not: "!",
         ast.Mod: "%",
-        ast.Div: "//",
+        ast.FloorDiv: "//",
         ast.Pow: "**",
         ast.LShift: "<<",
         ast.RShift: ">>",
@@ -84,7 +84,8 @@ def parse_expression(expression: str, base: int, var_name: str = "x") -> str:
                     raise ExpressionError(
                         f"Incorrect division: {base} is divisior of {right}"
                     )
-                right = f"{frac_to_padic(1, int(right))}"
+                right = f"{frac_to_padic(1, int(right), base)}"
+
             elif op in {"<<", ">>"} and (has_var_r or right != "1" or int(right) < 0):
                 raise ExpressionError("Incorrect shift")
 

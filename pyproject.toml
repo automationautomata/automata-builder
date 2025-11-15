@@ -22,6 +22,5 @@ automata_builder = "automata_builder.__main__:main"
 
 [tool.setuptools.package-data]
 automata_builder = [
-    "styles/*",
-    "locale/*",
+    "resources/**",
 ]

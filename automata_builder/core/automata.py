@@ -1,6 +1,6 @@
 import copy
 from itertools import product
-from typing import Generator, Sequence, Union
+from typing import Generator, Optional, Sequence, Union
 
 Table = dict[str, dict[str]]  # State: { Symbol: State }
 
@@ -8,10 +8,10 @@ Table = dict[str, dict[str]]  # State: { Symbol: State }
 class Automata:
     def __init__(
         self,
-        states: Sequence[str] | None = None,
+        states: Optional[Sequence[str]] = None,
         initial_state: str = "",
-        input_alphabet: Sequence[str] | None = None,
-        output_alphabet: Sequence[str] | None = None,
+        input_alphabet: Optional[Sequence[str]] = None,
+        output_alphabet: Optional[Sequence[str]] = None,
     ) -> None:
         if initial_state and states and initial_state not in states:
             raise ValueError("Initial state must be in given states")
@@ -141,19 +141,22 @@ class Automata:
         _, output = self.__read__(word)
         return output
 
-    def input_number(self, word: str) -> float:
-        n = len(self.inputs) + 1
-        number = sum(
-            self.inputs[word[-i]] / n ** (i - 1) for i in range(1, len(word) + 1)
-        )
+    @staticmethod
+    def _to_number(word: str, order: dict[str, int]) -> float:
+        n = len(order) + 1
+        k = len(word)
+
+        number = 0
+        for i in range(k):
+            number += order[word[i]] / n**i
+
         return number
 
+    def input_number(self, word: str) -> float:
+        return self._to_number(word, self.inputs)
+
     def output_number(self, word: str) -> float:
-        n = len(self.outputs) + 1
-        number = sum(
-            self.outputs[word[-i]] / n ** (i - 1) for i in range(1, len(word) + 1)
-        )
-        return number
+        return self._to_number(word, self.outputs)
 
     def words(self, length: int, prefix: str = "") -> Generator[str, None, None]:
         for seq in product(self.inputs, repeat=length):
