@@ -1,7 +1,6 @@
 from threading import Event
 from typing import Callable, Optional
 
-from core.automata import Automata
 from PyQt6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
@@ -20,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from automata_builder.core import compute
+from automata_builder.core.automata import Automata
 from automata_builder.ui.tab.components import (
     AutomataContainer,
     FunctionInput,
@@ -29,9 +29,9 @@ from automata_builder.ui.tab.components import (
     SidePanel,
 )
 from automata_builder.utiles.utiles import (
+    StoppableFunction,
     WorkerThread,
     generate_colors,
-    StoppableFunction,
 )
 
 

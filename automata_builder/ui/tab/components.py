@@ -1,16 +1,15 @@
 import enum
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 import PyQt6.QtCore as qtc
 import PyQt6.QtWidgets as qtw
-from attr import dataclass
-from core import parser
-from core.automata import Automata
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolbar2QT
 from matplotlib.figure import Figure
 from PyQt6.QtGui import QAction, QColor, QKeyEvent, QResizeEvent
 
-from automata_builder.core import compute
+from automata_builder.core import compute, parser
+from automata_builder.core.automata import Automata
 from automata_builder.ui.common import (
     FilteredLineEdit,
     FilteredTextEdit,

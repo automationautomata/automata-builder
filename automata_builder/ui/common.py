@@ -3,6 +3,7 @@ from typing import Callable, Optional
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtWidgets import *
+
 from automata_builder.utiles import lang, utiles
 
 

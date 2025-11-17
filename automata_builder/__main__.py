@@ -2,7 +2,8 @@ import signal
 import sys
 
 from PyQt6.QtWidgets import QApplication
-from ui.window import MainWindow
+
+from automata_builder.ui.window import MainWindow
 from automata_builder.utiles import utiles
 
 

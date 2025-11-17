@@ -144,14 +144,14 @@ class Automata:
     def input_number(self, word: str) -> float:
         n = len(self.inputs) + 1
         number = sum(
-            self.inputs[word[-i]] / n ** (i - 1) for i in range(1, len(word) + 1)
+            self.inputs[word[i-1]] / n ** (i - 1) for i in range(1, len(word) + 1)
         )
         return number
 
     def output_number(self, word: str) -> float:
         n = len(self.outputs) + 1
         number = sum(
-            self.outputs[word[-i]] / n ** (i - 1) for i in range(1, len(word) + 1)
+            self.outputs[word[i-1]] / n ** (i - 1) for i in range(1, len(word) + 1)
         )
         return number
 

@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from threading import Event
 from typing import Callable, Optional
@@ -18,27 +19,38 @@ class Points:
     color: str = "red"
 
 
-def padic_to_geom(num: str, n: int, base: int) -> float:
+def padic_to_geom(num: int, n: int, base: int) -> float:
     if base % 2 == 0:
-        digit_len = len(bin(base)[2:]) - 1
-        num_len = digit_len * n
-
         str_num = bin(num)[2::]
-        if num >= 0:
-            str_num = str_num.zfill(num_len)
+        if num < 0:
+            str_num = str_num[1::]
+            filling_symb = "1"
         else:
-            str_num = str_num[1::].ljust(num_len, "1")
+            filling_symb = "0"
 
-        digits = [
-            int(str_num[i : i + digit_len], base=2)
-            for i in range(0, num_len, digit_len)
-        ]
+        digit_len = int(math.log2(base))
+        digits_num = n * digit_len
+
+        if len(str_num) < digits_num:
+            str_num = str_num.rjust(digits_num, filling_symb)
+        elif len(str_num) > digits_num:
+            str_num = str_num[len(str_num) - digits_num :]
+
+        digits = [0] * digits_num
+        for i, j in enumerate(range(0, len(str_num), digit_len)):
+            digits[i] = int(str_num[j : j + digit_len], base=2)
     else:
         digits = [0] * n
         for i in range(n):
+            if num == 0:
+                break
             digits[i] = num % base
             num //= base
-    return sum(digits[n - i - 1] / n**i for i in range(n))
+
+    res = 0
+    for i in range(n):
+        res += (digits[-i - 1] + 1) * (base + 1) ** -i
+    return res
 
 
 def by_function(
